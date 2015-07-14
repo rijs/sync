@@ -32757,11 +32757,12 @@ var key = require('key')
   , is  = require('is')
 
 module.exports = function by(k, v){
+  var exists = arguments.length == 1
   return function(o){
     var d = key(k)(o)
     
     return d && v && d.toLowerCase && v.toLowerCase ? d.toLowerCase() === v.toLowerCase()
-         : !v ? Boolean(d)
+         : exists ? Boolean(d)
          : is.fn(v) ? v(d)
          : d == v
   }
