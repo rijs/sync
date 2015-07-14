@@ -1,7 +1,7 @@
 var expect   = require('chai').expect
   , debounce = require('utilise/debounce')
-  , core     = require('core')
-  , data     = require('data')
+  , core     = require('rijs.core')
+  , data     = require('rijs.data')
   , sync     = require('../')
   , ripple   = sync(data(core()))
   
