@@ -10,8 +10,7 @@
     "clean": "rm -rf dist && mkdir dist",
     "minify": "uglifyjs dist/client.js -m -c drop_console,dead_code -d debug=false -o dist/client.min.js",
     "build": "npm run clean && npm run babel && npm run bundle && npm run minify",
-    "test": "popper",
-    "w": "sh -c 'which popper'"
+    "test": "popper"
   },
   "license": "pemrouz.mit-license.org",
   "devDependencies": {
@@ -23,6 +22,7 @@
     "rijs.data": "git://github.com/rijs/data",
     "rijs.css": "git://github.com/rijs/css",
     "rijs.fn": "git://github.com/rijs/fn",
+    "ripple": "git://github.com/pemrouz/ripple",
     "popper": "*",
     "coveralls": "^2.11.2",
     "express": "^4.12.3",
