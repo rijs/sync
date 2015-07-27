@@ -175,7 +175,6 @@ function stats(total, name){
 
 import identity from 'utilise/identity'
 import replace from 'utilise/replace'
-import matches from 'utilise/matches'
 import values from 'utilise/values'
 import header from 'utilise/header'
 import client from 'utilise/client'

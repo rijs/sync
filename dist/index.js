@@ -167,8 +167,6 @@ var identity = _interopRequire(require("utilise/identity"));
 
 var replace = _interopRequire(require("utilise/replace"));
 
-var matches = _interopRequire(require("utilise/matches"));
-
 var values = _interopRequire(require("utilise/values"));
 
 var header = _interopRequire(require("utilise/header"));
