@@ -8,13 +8,8 @@ var expect   = require('chai').expect
 describe('Sync', function(){
 
   beforeEach(function(done){
-    console.log('beforeEach')
     ripple.io.emit('beforeEach')
-    var d = debounce(done)
-    ripple.io.once('done', function(){ 
-      console.log('done')
-      d()
-    })
+    ripple.io.once('done', debounce(done))
   })
 
   it('should load resources on connection', function(){  
