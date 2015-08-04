@@ -8,8 +8,13 @@ var expect   = require('chai').expect
 describe('Sync', function(){
 
   beforeEach(function(done){
+    console.log('beforeEach')
     ripple.io.emit('beforeEach')
-    ripple.io.once('done', debounce(done))
+    var d = debounce(done)
+    ripple.io.once('done', function(){ 
+      console.log('done')
+      d()
+    })
   })
 
   it('should load resources on connection', function(){  
@@ -26,18 +31,17 @@ describe('Sync', function(){
 
   it('should update data (array)', function(done){ 
     ripple('array')[2] = { i: 5 }
-    ripple('array').emit('change')
     ripple('array').once('change', function(){ 
       expect(ripple('array')[0].i).to.eql(0)
       expect(ripple('array')[1].i).to.eql(1)
       expect(ripple('array')[2].i).to.eql(5)
       done() 
     })
+    ripple('array').emit('change')
   })
 
   it('should push data (array)', function(done){ 
     ripple('array').push({ i: 3 })
-    ripple('array').emit('change')
     ripple('array').once('change', function(){ 
       expect(ripple('array')[0].i).to.eql(0)
       expect(ripple('array')[1].i).to.eql(1)
@@ -45,33 +49,33 @@ describe('Sync', function(){
       expect(ripple('array')[3].i).to.eql(3)
       done() 
     })
+    ripple('array').emit('change')
   })
 
   it('should remove data (array)', function(done){ 
     ripple('array').pop()
-    ripple('array').emit('change')
     ripple('array').once('change', function(){ 
       expect(ripple('array')[0].i).to.eql(0)
       expect(ripple('array')[1].i).to.eql(1)
       expect(ripple('array')[2]).to.eql(undefined)
       done() 
     })
+    ripple('array').emit('change')
   })
 
   it('should update data (object)', function(done){ 
     ripple('object').c = 5
-    ripple('object').emit('change')
     ripple('object').once('change', function(){ 
       expect(ripple('object').a).to.eql(0)
       expect(ripple('object').b).to.eql(1)
       expect(ripple('object').c).to.eql(5)
       done() 
     })
+    ripple('object').emit('change')
   })
 
   it('should push data (object)', function(done){ 
     ripple('object').d = 3
-    ripple('object').emit('change')
     ripple('object').once('change', function(){ 
       expect(ripple('object').a).to.eql(0)
       expect(ripple('object').b).to.eql(1)
@@ -79,21 +83,21 @@ describe('Sync', function(){
       expect(ripple('object').d).to.eql(3)
       done() 
     })
+    ripple('object').emit('change')
   })
 
   it('should remove data (object)', function(done){ 
     delete ripple('object').c
-    ripple('object').emit('change')
     ripple('object').once('change', function(){ 
       expect(ripple('object').a).to.eql(0)
       expect(ripple('object').b).to.eql(1)
       expect(ripple('object').c).to.eql(undefined)
       done() 
     })
+    ripple('object').emit('change')
   })
 
   it('should proxy all data', function(done){ 
-
 
     expect(ripple('proxy').sum).to.eql(3)
     

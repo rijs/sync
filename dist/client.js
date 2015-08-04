@@ -32891,7 +32891,7 @@ module.exports = function key(k, v){
          : is.arr(k) ? (k.map(copy), masked)
          : o[k] || !keys.length ? (set ? ((o[k] = is.fn(v) ? v(o[k]) : v), o)
                                        :   o[k])
-                                : (set ? key(keys.join('.'), v)(o[root] ? o[root] : (o[root] = {}))
+                                : (set ? (key(keys.join('.'), v)(o[root] ? o[root] : (o[root] = {})), o)
                                        : key(keys.join('.'))(o[root]))
 
     function copy(d){
@@ -32951,11 +32951,27 @@ module.exports = function str(d){
 }
 },{"utilise/is":345}],355:[function(require,module,exports){
 module.exports = { 
-  arr : toArray
+  arr: toArray
+, obj: toObject
 }
 
 function toArray(d){
   return Array.prototype.slice.call(d, 0)
+}
+
+function toObject(d) {
+  var by = 'id'
+    , o = {}
+
+  return arguments.length == 1 
+    ? (by = d, reduce)
+    : reduce.apply(this, arguments)
+
+  function reduce(p,v,i){
+    if (i === 0) p = {}
+    p[v[by]] = v
+    return p
+  }
 }
 },{}],356:[function(require,module,exports){
 var keys = require('utilise/keys')
