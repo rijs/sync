@@ -4,6 +4,7 @@
 export default function sync(ripple, server){
   log('creating')
   
+  if (!client && !server) return
   values(ripple.types).map(headers(ripple))
   ripple.sync = emit(ripple)
   ripple.io = io(server)

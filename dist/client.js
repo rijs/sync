@@ -11,7 +11,9 @@ module.exports = sync;
 function sync(ripple, server) {
   log("creating");
 
-  values(ripple.types).map(headers(ripple));
+  if (!client && !server) {
+    return;
+  }values(ripple.types).map(headers(ripple));
   ripple.sync = emit(ripple);
   ripple.io = io(server);
   ripple.on("change", function (res) {
