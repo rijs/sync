@@ -120,7 +120,9 @@ function silent(ripple) {
 }
 
 function io(opts) {
-  return !client ? require("socket.io")(opts.server || opts) : window.io ? window.io() : is.fn(require("socket.io-client")) ? require("socket.io-client")() : { on: noop, emit: noop };
+  var r = !client ? require("socket.io")(opts.server || opts) : window.io ? window.io() : is.fn(require("socket.io-client")) ? require("socket.io-client")() : { on: noop, emit: noop };
+  r.use = r.use || noop;
+  return r;
 }
 
 // emit all or some resources, to all or some clients
