@@ -12,6 +12,7 @@ export default function sync(ripple, server){
   ripple.io.on('change', silent(ripple))
   ripple.io.on('connection', s => s.on('change', change(ripple)))
   ripple.io.on('connection', s => emit(ripple)(s)())
+  ripple.io.use(setIP)
   return ripple
 }
 
@@ -174,6 +175,12 @@ function stats(total, name){
     , 'sending', name
     )
   }
+}
+
+function setIP(socket, next){
+  socket.ip = socket.request.headers['x-forwarded-for'] 
+           || socket.request.connection.remoteAddress
+  next()
 }
 
 import identity from 'utilise/identity'

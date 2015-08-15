@@ -26,6 +26,7 @@ function sync(ripple, server) {
   ripple.io.on("connection", function (s) {
     return emit(ripple)(s)();
   });
+  ripple.io.use(setIP);
   return ripple;
 }
 
@@ -159,6 +160,11 @@ function stats(total, name) {
   return function (results) {
     log(str(results.filter(Boolean).length).green.bold + "/" + str(total).green, "sending", name);
   };
+}
+
+function setIP(socket, next) {
+  socket.ip = socket.request.headers["x-forwarded-for"] || socket.request.connection.remoteAddress;
+  next();
 }
 
 var identity = _interopRequire(require("utilise/identity"));
