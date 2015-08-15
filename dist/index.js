@@ -22,7 +22,6 @@ function sync(ripple, server) {
   ripple.io.on("connection", function (s) {
     return s.on("change", change(ripple));
   });
-  // ripple.io.on('connection', s => s.on('change', res => emit(ripple)()(res.name)))
   ripple.io.on("connection", function (s) {
     return emit(ripple)(s)();
   });
@@ -44,12 +43,11 @@ function change(ripple) {
         body = to.call(socket, key("body")(res)),
         deltas = diff(body, req.body);
 
-    if (is.arr(deltas)) return delta("");
+    if (is.arr(deltas)) return delta("") && res.body.emit("change");
 
-    keys(deltas).reverse().filter(not(is("_t"))).map(flatten(deltas)).map(delta);
+    keys(deltas).reverse().filter(not(is("_t"))).map(paths(deltas)).reduce(flatten, []).map(delta).some(Boolean) && res.body.emit("change");
 
     function delta(k) {
-
       var d = key(k)(deltas),
           name = req.name,
           body = res.body,
@@ -59,24 +57,21 @@ function change(ripple) {
           next = types[type];
 
       if (!type) {
-        return;
+        return false;
       }if (!from || from.call(socket, value, body, index, type, name, next)) {
-        if (!index) {
-          return silent(ripple)(req);
-        }next(index, value, body, name, res);
-        // res.headers.silent = true
-        ripple(name).emit("change");
+        !index ? silent(ripple)(req) : next(index, value, body, name, res);
+        return true;
       }
     }
   };
 }
 
-function flatten(base) {
+function paths(base) {
   return function (k) {
     var d = key(k)(base);
     k = is.arr(k) ? k : [k];
 
-    return is.arr(d) ? k.join(".") : flatten(base)(k.concat(keys(d)).join("."));
+    return is.arr(d) ? k.join(".") : keys(d).map(prepend(k.join(".") + ".")).map(paths(base));
   };
 }
 
@@ -168,6 +163,10 @@ function stats(total, name) {
 var identity = _interopRequire(require("utilise/identity"));
 
 var replace = _interopRequire(require("utilise/replace"));
+
+var prepend = _interopRequire(require("utilise/prepend"));
+
+var flatten = _interopRequire(require("utilise/flatten"));
 
 var values = _interopRequire(require("utilise/values"));
 

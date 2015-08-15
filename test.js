@@ -4,12 +4,17 @@ var expect   = require('chai').expect
   , data     = require('rijs.data')
   , sync     = require('./')
   , ripple   = sync(data(core()))
+  , temp
   
 describe('Sync', function(){
 
   beforeEach(function(done){
     ripple.io.emit('beforeEach')
     ripple.io.once('done', debounce(done))
+  })
+
+  afterEach(function(){
+    temp && ripple.io.off('change', temp)
   })
 
   it('should load resources on connection', function(){  
@@ -26,7 +31,7 @@ describe('Sync', function(){
 
   it('should update data (array)', function(done){ 
     ripple('array')[2] = { i: 5 }
-    ripple('array').once('change', function(){ 
+    ripple.io.once('change', temp = function(){ 
       expect(ripple('array')[0].i).to.eql(0)
       expect(ripple('array')[1].i).to.eql(1)
       expect(ripple('array')[2].i).to.eql(5)
@@ -37,7 +42,7 @@ describe('Sync', function(){
 
   it('should push data (array)', function(done){ 
     ripple('array').push({ i: 3 })
-    ripple('array').once('change', function(){ 
+    ripple.io.once('change', temp = function(){
       expect(ripple('array')[0].i).to.eql(0)
       expect(ripple('array')[1].i).to.eql(1)
       expect(ripple('array')[2].i).to.eql(2)
@@ -49,7 +54,7 @@ describe('Sync', function(){
 
   it('should remove data (array)', function(done){ 
     ripple('array').pop()
-    ripple('array').once('change', function(){ 
+    ripple.io.once('change', temp = function(){ 
       expect(ripple('array')[0].i).to.eql(0)
       expect(ripple('array')[1].i).to.eql(1)
       expect(ripple('array')[2]).to.eql(undefined)
@@ -60,7 +65,7 @@ describe('Sync', function(){
 
   it('should update data (object)', function(done){ 
     ripple('object').c = 5
-    ripple('object').once('change', function(){ 
+    ripple.io.once('change', temp = function(){
       expect(ripple('object').a).to.eql(0)
       expect(ripple('object').b).to.eql(1)
       expect(ripple('object').c).to.eql(5)
@@ -71,7 +76,7 @@ describe('Sync', function(){
 
   it('should push data (object)', function(done){ 
     ripple('object').d = 3
-    ripple('object').once('change', function(){ 
+    ripple.io.once('change', temp = function(){
       expect(ripple('object').a).to.eql(0)
       expect(ripple('object').b).to.eql(1)
       expect(ripple('object').c).to.eql(2)
@@ -83,7 +88,7 @@ describe('Sync', function(){
 
   it('should remove data (object)', function(done){ 
     delete ripple('object').c
-    ripple('object').once('change', function(){ 
+    ripple.io.once('change', temp = function(){
       expect(ripple('object').a).to.eql(0)
       expect(ripple('object').b).to.eql(1)
       expect(ripple('object').c).to.eql(undefined)
@@ -106,21 +111,44 @@ describe('Sync', function(){
     
     ripple('proxy').emit('change')
 
-    ripple('proxy')
-      .once('change', function(data){
-        expect(data.sum).to.eql(6)
-        expect(data.length).to.eql(4)
-        done()
-      })
+    ripple.io.once('change', temp = function(){
+      expect(ripple('proxy').sum).to.eql(6)
+      expect(ripple('proxy').length).to.eql(4)
+      done()
+    })
   })
 
   it('should deal with top-level changes', function(done){ 
-    ripple.once('change', function(){
-        expect(ripple('object')).to.eql(['heh..'])
-        done()
-      })
+    ripple.io.once('change', temp = function(){
+      expect(ripple('object')).to.eql(['heh..'])
+      done()
+    })
     ripple('object', ['heh..'])
   })
 
+  it('should receive one ack for one change, despite multiple changes', function(done){ 
+    var counter = 0
+    ripple('object', {219: { total: 0, me: false }})
+    ripple.io.once('change', temp = function(){
+      counter++
+    })
+
+    setTimeout(function(){
+      expect(counter).to.be.eql(1)
+      done()
+    }, 150)
+  })
+
+  it('should deal with multiple deep changes at different levels', function(done){ 
+    ripple('object', {219: { total: 0, me: false, x: { y: { z: 1 }}}})
+
+    ripple.io.once('change', temp = function(){
+      ripple('object', {219: { total: 1, me: true, x: { y: { z: 10 }}}})
+      ripple.io.once('change', temp = function(){
+        expect(ripple('object')).to.eql({219: { total: 1, me: true, x: { y: { z: 10 }}}})   
+        done()
+      })
+    })
+  })
 
 })

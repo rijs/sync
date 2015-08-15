@@ -11,7 +11,6 @@ export default function sync(ripple, server){
   ripple.on('change', res => emit(ripple)()(res.name))
   ripple.io.on('change', silent(ripple))
   ripple.io.on('connection', s => s.on('change', change(ripple)))
-  // ripple.io.on('connection', s => s.on('change', res => emit(ripple)()(res.name)))
   ripple.io.on('connection', s => emit(ripple)(s)())
   return ripple
 }
@@ -30,17 +29,18 @@ function change(ripple){
       , from   = header('proxy-from')(res)
       , body   = to.call(socket, key('body')(res))
       , deltas = diff(body, req.body)
-  
-    if (is.arr(deltas)) return delta('') 
+
+    if (is.arr(deltas)) return delta('') && res.body.emit('change')
 
     keys(deltas)
       .reverse()
       .filter(not(is('_t')))
-      .map(flatten(deltas))
+      .map(paths(deltas))
+      .reduce(flatten, [])
       .map(delta)
+      .some(Boolean) && res.body.emit('change')
 
     function delta(k){
-      
       var d     = key(k)(deltas)
         , name  = req.name
         , body  = res.body
@@ -52,24 +52,26 @@ function change(ripple){
         , value = type == 'update' ? d[1] : d[0]
         , next  = types[type]
 
-        if (!type) return;
-        if (!from || from.call(socket, value, body, index, type, name, next)) {
-          if (!index) return silent(ripple)(req)
-          next(index, value, body, name, res)
-          // res.headers.silent = true
-          ripple(name).emit('change')
-        }
+      if (!type) return false
+      if (!from || from.call(socket, value, body, index, type, name, next)) {
+        !index 
+          ? silent(ripple)(req)
+          : next(index, value, body, name, res)
+        return true
+      }
     }
   }
 }
 
-function flatten(base){
+function paths(base){
   return function(k){
     var d = key(k)(base)
     k = is.arr(k) ? k : [k]
 
     return is.arr(d) ? k.join('.')
-         : flatten(base)(k.concat(keys(d)).join('.'))
+         : keys(d)
+             .map(prepend(k.join('.') + '.'))
+             .map(paths(base))
   }
 }
 
@@ -176,6 +178,8 @@ function stats(total, name){
 
 import identity from 'utilise/identity'
 import replace from 'utilise/replace'
+import prepend from 'utilise/prepend'
+import flatten from 'utilise/flatten'
 import values from 'utilise/values'
 import header from 'utilise/header'
 import client from 'utilise/client'
