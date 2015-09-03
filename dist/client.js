@@ -53,7 +53,7 @@ function change(ripple) {
       var d = key(k)(deltas),
           name = req.name,
           body = res.body,
-          index = k.replace(/_/g, ""),
+          index = k.replace(/(^|\.)_/g, "$1"),
           type = d.length == 1 ? "push" : d.length == 2 ? "update" : d[2] === 0 ? "remove" : "",
           value = type == "update" ? d[1] : d[0],
           next = types[type];
@@ -32887,9 +32887,9 @@ function isDef(d) {
 
 function isIn(set) {
   return function(d){
-    return  set.indexOf 
-         ? ~set.indexOf(d)
-         :  d in set
+    return !set ? false  
+         : set.indexOf ? ~set.indexOf(d)
+         : d in set
   }
 }
 },{}],347:[function(require,module,exports){
@@ -32911,8 +32911,9 @@ module.exports = function key(k, v){
                                 : (set ? (key(keys.join('.'), v)(o[root] ? o[root] : (o[root] = {})), o)
                                        : key(keys.join('.'))(o[root]))
 
-    function copy(d){
-      key(d, key(d)(o))(masked)
+    function copy(k){
+      var val = key(k)(o)
+      ;(val != undefined) && key(k, val)(masked)
     }
   }
 }

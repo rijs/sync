@@ -45,7 +45,7 @@ function change(ripple){
       var d     = key(k)(deltas)
         , name  = req.name
         , body  = res.body
-        , index = k.replace(/_/g, '')
+        , index = k.replace(/(^|\.)_/g, '$1')
         , type  = d.length == 1 ? 'push'
                 : d.length == 2 ? 'update'
                 : d[2]    === 0 ? 'remove' 
