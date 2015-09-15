@@ -137,24 +137,30 @@ function emit(ripple) {
           lgt = stats(sockets.length, name),
           silent = header("silent", true)(res);
 
-      return silent ? delete res.headers.silent : !res ? log("no resource to emit: ", name) : is.str(socket) ? lgt(sockets.filter(by("sessionID", socket)).map(to(res))) : !socket ? lgt(sockets.map(to(res))) : lgt([to(res)(socket)]);
+      return silent ? delete res.headers.silent : !res ? log("no resource to emit: ", name) : is.str(socket) ? lgt(sockets.filter(by("sessionID", socket)).map(to(ripple)(res))) : !socket ? lgt(sockets.map(to(ripple)(res))) : lgt([to(ripple)(res)(socket)]);
     };
   };
 }
 
-function to(res) {
-  return function (socket) {
-    var fn = res.headers["proxy-to"] || identity,
-        body = is.fn(res.body) ? "" + res.body : res.body,
-        body = fn.call(socket, body);
+function to(ripple) {
+  return function (res) {
+    return function (socket) {
+      var body = is.fn(res.body) ? "" + res.body : res.body,
+          fn = {
+        type: type(ripple)(res).to || identity,
+        res: res.headers["proxy-to"] || identity
+      };
 
-    body && socket.emit("change", {
-      name: res.name,
-      body: body,
-      headers: res.headers
-    });
+      body = fn.res.call(socket, body);
 
-    return !!body;
+      body && socket.emit("change", fn.type({
+        name: res.name,
+        body: body,
+        headers: res.headers
+      }));
+
+      return !!body;
+    };
   };
 }
 
@@ -167,6 +173,12 @@ function stats(total, name) {
 function setIP(socket, next) {
   socket.ip = socket.request.headers["x-forwarded-for"] || socket.request.connection.remoteAddress;
   next();
+}
+
+function type(ripple) {
+  return function (res) {
+    return ripple.types[header("content-type")(res)];
+  };
 }
 
 var identity = _interopRequire(require("utilise/identity"));
