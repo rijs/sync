@@ -50,8 +50,9 @@ function change(ripple) {
 
     function delta(k) {
       var d = key(k)(deltas),
-          name = req.name,
-          body = res.body,
+          name = req.name
+      // , body  = res.body
+      ,
           index = k.replace(/(^|\.)_/g, "$1"),
           type = d.length == 1 ? "push" : d.length == 2 ? "update" : d[2] === 0 ? "remove" : "",
           value = type == "update" ? d[1] : d[0],
@@ -81,7 +82,7 @@ function push(k, value, body, name) {
       tail = path.pop(),
       o = key(path.join("."))(body) || body;
 
-  is.arr(o) ? o.splice(tail, 0, value) : o[k] = value;
+  is.arr(o) ? o.splice(tail, 0, value) : key(k, value)(body);
 }
 
 function remove(k, value, body, name) {

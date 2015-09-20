@@ -44,7 +44,7 @@ function change(ripple){
     function delta(k){
       var d     = key(k)(deltas)
         , name  = req.name
-        , body  = res.body
+        // , body  = res.body
         , index = k.replace(/(^|\.)_/g, '$1')
         , type  = d.length == 1 ? 'push'
                 : d.length == 2 ? 'update'
@@ -83,7 +83,7 @@ function push(k, value, body, name) {
 
   is.arr(o)
     ? o.splice(tail, 0, value) 
-    : o[k] = value
+    : key(k, value)(body)
 }
 
 function remove(k, value, body, name) {
