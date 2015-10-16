@@ -19,6 +19,7 @@ popper = popper({
 popper.io.on('connection', function(socket){
   socket.on('beforeEach', function(){
     popper('foo'         , 'bar', headers())
+    popper('some.css'    , '* { color: red }')
     popper('object'      , { a:0 , b:1, c:2 }, headers())
     popper('array'       , [{i:0}, {i:1},{i:2}], headers())
     popper('proxy'       , [{i:0}, {i:1},{i:2}], 

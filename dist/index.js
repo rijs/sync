@@ -34,9 +34,11 @@ function change(ripple) {
     log("receiving", req.name);
 
     var socket = this,
-        res = ripple.resources[req.name];
+        res = ripple.resources[req.name],
+        check = type(ripple)(req).from || identity;
 
     if (!res) return log("no resource", req.name);
+    if (!check.call(this, req)) return debug("type skip", req.name);
     if (!is.obj(res.body)) return silent(ripple)(req);
 
     var to = header("proxy-to")(res) || identity,
@@ -146,20 +148,20 @@ function to(ripple) {
   return function (res) {
     return function (socket) {
       var body = is.fn(res.body) ? "" + res.body : res.body,
+          rep,
           fn = {
         type: type(ripple)(res).to || identity,
         res: res.headers["proxy-to"] || identity
       };
 
       body = fn.res.call(socket, body);
+      if (!body) return false;
 
-      body && socket.emit("change", fn.type({
-        name: res.name,
-        body: body,
-        headers: res.headers
-      }));
+      rep = fn.type.call(socket, { name: res.name, body: body, headers: res.headers });
+      if (!rep) return false;
 
-      return !!body;
+      socket.emit("change", rep);
+      return true;
     };
   };
 }
@@ -217,4 +219,5 @@ var diff = require("jsondiffpatch").diff;
 
 log = log("[ri/sync]");
 err = err("[ri/sync]");
-var types = { push: push, remove: remove, update: update };
+var types = { push: push, remove: remove, update: update },
+    debug = noop;
