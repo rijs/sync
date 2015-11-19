@@ -1,28 +1,89 @@
-"use strict";
+'use strict';
 
-var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = sync;
+
+var _identity = require('utilise/identity');
+
+var _identity2 = _interopRequireDefault(_identity);
+
+var _replace = require('utilise/replace');
+
+var _replace2 = _interopRequireDefault(_replace);
+
+var _prepend = require('utilise/prepend');
+
+var _prepend2 = _interopRequireDefault(_prepend);
+
+var _flatten = require('utilise/flatten');
+
+var _flatten2 = _interopRequireDefault(_flatten);
+
+var _values = require('utilise/values');
+
+var _values2 = _interopRequireDefault(_values);
+
+var _header = require('utilise/header');
+
+var _header2 = _interopRequireDefault(_header);
+
+var _client = require('utilise/client');
+
+var _client2 = _interopRequireDefault(_client);
+
+var _noop = require('utilise/noop');
+
+var _noop2 = _interopRequireDefault(_noop);
+
+var _keys = require('utilise/keys');
+
+var _keys2 = _interopRequireDefault(_keys);
+
+var _key = require('utilise/key');
+
+var _key2 = _interopRequireDefault(_key);
+
+var _str = require('utilise/str');
+
+var _str2 = _interopRequireDefault(_str);
+
+var _not = require('utilise/not');
+
+var _not2 = _interopRequireDefault(_not);
+
+var _by = require('utilise/by');
+
+var _by2 = _interopRequireDefault(_by);
+
+var _is = require('utilise/is');
+
+var _is2 = _interopRequireDefault(_is);
+
+var _jsondiffpatch = require('jsondiffpatch');
+
+/* istanbul ignore next */
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 // -------------------------------------------
 // API: Synchronises resources between server/client
 // -------------------------------------------
-module.exports = sync;
-
 function sync(ripple, server) {
-  log("creating");
+  log('creating');
 
-  if (!client && !server) {
-    return;
-  }values(ripple.types).map(headers(ripple));
+  if (!_client2.default && !server) return;
+  (0, _values2.default)(ripple.types).map(headers(ripple));
   ripple.sync = emit(ripple);
   ripple.io = io(server);
-  ripple.on("change", function (res) {
+  ripple.on('change', function (res) {
     return emit(ripple)()(res.name);
   });
-  ripple.io.on("change", silent(ripple));
-  ripple.io.on("connection", function (s) {
-    return s.on("change", change(ripple));
+  ripple.io.on('change', silent(ripple));
+  ripple.io.on('connection', function (s) {
+    return s.on('change', change(ripple));
   });
-  ripple.io.on("connection", function (s) {
+  ripple.io.on('connection', function (s) {
     return emit(ripple)(s)();
   });
   ripple.io.use(setIP);
@@ -31,38 +92,37 @@ function sync(ripple, server) {
 
 function change(ripple) {
   return function (req) {
-    log("receiving", req.name);
+    log('receiving', req.name);
 
     var socket = this,
         res = ripple.resources[req.name],
-        check = type(ripple)(req).from || identity;
+        check = type(ripple)(req).from || _identity2.default;
 
-    if (!res) return log("no resource", req.name);
-    if (!check.call(this, req)) return debug("type skip", req.name);
-    if (!is.obj(res.body)) return silent(ripple)(req);
+    if (!res) return log('no resource', req.name);
+    if (!check.call(this, req)) return debug('type skip', req.name);
+    if (!_is2.default.obj(res.body)) return silent(ripple)(req);
 
-    var to = header("proxy-to")(res) || identity,
-        from = header("proxy-from")(res),
-        body = to.call(socket, key("body")(res)),
-        deltas = diff(body, req.body);
+    var to = (0, _header2.default)('proxy-to')(res) || _identity2.default,
+        from = (0, _header2.default)('proxy-from')(res),
+        body = to.call(socket, (0, _key2.default)('body')(res)),
+        deltas = (0, _jsondiffpatch.diff)(body, req.body);
 
-    if (is.arr(deltas)) return delta("") && res.body.emit("change");
+    if (_is2.default.arr(deltas)) return delta('') && res.body.emit('change');
 
-    keys(deltas).reverse().filter(not(is("_t"))).map(paths(deltas)).reduce(flatten, []).map(delta).some(Boolean) && res.body.emit("change");
+    (0, _keys2.default)(deltas).reverse().filter((0, _not2.default)((0, _is2.default)('_t'))).map(paths(deltas)).reduce(_flatten2.default, []).map(delta).some(Boolean) && res.body.emit('change');
 
     function delta(k) {
-      var d = key(k)(deltas),
+      var d = (0, _key2.default)(k)(deltas),
           name = req.name
       // , body  = res.body
       ,
-          index = k.replace(/(^|\.)_/g, "$1"),
-          type = d.length == 1 ? "push" : d.length == 2 ? "update" : d[2] === 0 ? "remove" : "",
-          value = type == "update" ? d[1] : d[0],
+          index = k.replace(/(^|\.)_/g, '$1'),
+          type = d.length == 1 ? 'push' : d.length == 2 ? 'update' : d[2] === 0 ? 'remove' : '',
+          value = type == 'update' ? d[1] : d[0],
           next = types[type];
 
-      if (!type) {
-        return false;
-      }if (!from || from.call(socket, value, body, index, type, name, next)) {
+      if (!type) return false;
+      if (!from || from.call(socket, value, body, index, type, name, next)) {
         !index ? silent(ripple)(req) : next(index, value, body, name, res);
         return true;
       }
@@ -72,58 +132,58 @@ function change(ripple) {
 
 function paths(base) {
   return function (k) {
-    var d = key(k)(base);
-    k = is.arr(k) ? k : [k];
+    var d = (0, _key2.default)(k)(base);
+    k = _is2.default.arr(k) ? k : [k];
 
-    return is.arr(d) ? k.join(".") : keys(d).map(prepend(k.join(".") + ".")).map(paths(base));
+    return _is2.default.arr(d) ? k.join('.') : (0, _keys2.default)(d).map((0, _prepend2.default)(k.join('.') + '.')).map(paths(base));
   };
 }
 
 function push(k, value, body, name) {
-  var path = k.split("."),
+  var path = k.split('.'),
       tail = path.pop(),
-      o = key(path.join("."))(body) || body;
+      o = (0, _key2.default)(path.join('.'))(body) || body;
 
-  is.arr(o) ? o.splice(tail, 0, value) : key(k, value)(body);
+  _is2.default.arr(o) ? o.splice(tail, 0, value) : (0, _key2.default)(k, value)(body);
 }
 
 function remove(k, value, body, name) {
-  var path = k.split("."),
+  var path = k.split('.'),
       tail = path.pop(),
-      o = key(path.join("."))(body) || body;
+      o = (0, _key2.default)(path.join('.'))(body) || body;
 
-  is.arr(o) ? o.splice(tail, 1) : delete o[tail];
+  _is2.default.arr(o) ? o.splice(tail, 1) : delete o[tail];
 }
 
 function update(k, value, body, name) {
-  key(k, value)(body);
+  (0, _key2.default)(k, value)(body);
 }
 
 function headers(ripple) {
   return function (type) {
-    var parse = type.parse || noop;
+    var parse = type.parse || _noop2.default;
     type.parse = function (res) {
-      if (client) return (parse.apply(this, arguments), res);
+      if (_client2.default) return parse.apply(this, arguments), res;
       var existing = ripple.resources[res.name],
-          from = header("proxy-from")(existing),
-          to = header("proxy-to")(existing);
+          from = (0, _header2.default)('proxy-from')(existing),
+          to = (0, _header2.default)('proxy-to')(existing);
 
-      res.headers["proxy-from"] = header("proxy-from")(res) || header("from")(res) || from;
-      res.headers["proxy-to"] = header("proxy-to")(res) || header("to")(res) || to;
-      return (parse.apply(this, arguments), res);
+      res.headers['proxy-from'] = (0, _header2.default)('proxy-from')(res) || (0, _header2.default)('from')(res) || from;
+      res.headers['proxy-to'] = (0, _header2.default)('proxy-to')(res) || (0, _header2.default)('to')(res) || to;
+      return parse.apply(this, arguments), res;
     };
   };
 }
 
 function silent(ripple) {
   return function (res) {
-    return (res.headers.silent = true, ripple(res));
+    return res.headers.silent = true, ripple(res);
   };
 }
 
 function io(opts) {
-  var r = !client ? require("socket.io")(opts.server || opts) : window.io ? window.io() : is.fn(require("socket.io-client")) ? require("socket.io-client")() : { on: noop, emit: noop };
-  r.use = r.use || noop;
+  var r = !_client2.default ? require('socket.io')(opts.server || opts) : window.io ? window.io() : _is2.default.fn(require('socket.io-client')) ? require('socket.io-client')() : { on: _noop2.default, emit: _noop2.default };
+  r.use = r.use || _noop2.default;
   return r;
 }
 
@@ -132,14 +192,14 @@ function emit(ripple) {
   return function (socket) {
     return function (name) {
       if (arguments.length && !name) return;
-      if (!name) return (values(ripple.resources).map(key("name")).map(emit(ripple)(socket)), ripple);
+      if (!name) return (0, _values2.default)(ripple.resources).map((0, _key2.default)('name')).map(emit(ripple)(socket)), ripple;
 
       var res = ripple.resources[name],
-          sockets = client ? [ripple.io] : ripple.io.of("/").sockets,
+          sockets = _client2.default ? [ripple.io] : ripple.io.of('/').sockets,
           lgt = stats(sockets.length, name),
-          silent = header("silent", true)(res);
+          silent = (0, _header2.default)('silent', true)(res);
 
-      return silent ? delete res.headers.silent : !res ? log("no resource to emit: ", name) : is.str(socket) ? lgt(sockets.filter(by("sessionID", socket)).map(to(ripple)(res))) : !socket ? lgt(sockets.map(to(ripple)(res))) : lgt([to(ripple)(res)(socket)]);
+      return silent ? delete res.headers.silent : !res ? log('no resource to emit: ', name) : _is2.default.str(socket) ? lgt(sockets.filter((0, _by2.default)('sessionID', socket)).map(to(ripple)(res))) : !socket ? lgt(sockets.map(to(ripple)(res))) : lgt([to(ripple)(res)(socket)]);
     };
   };
 }
@@ -147,11 +207,11 @@ function emit(ripple) {
 function to(ripple) {
   return function (res) {
     return function (socket) {
-      var body = is.fn(res.body) ? "" + res.body : res.body,
+      var body = _is2.default.fn(res.body) ? '' + res.body : res.body,
           rep,
           fn = {
-        type: type(ripple)(res).to || identity,
-        res: res.headers["proxy-to"] || identity
+        type: type(ripple)(res).to || _identity2.default,
+        res: res.headers['proxy-to'] || _identity2.default
       };
 
       body = fn.res.call(socket, body);
@@ -160,7 +220,7 @@ function to(ripple) {
       rep = fn.type.call(socket, { name: res.name, body: body, headers: res.headers });
       if (!rep) return false;
 
-      socket.emit("change", rep);
+      socket.emit('change', rep);
       return true;
     };
   };
@@ -168,56 +228,22 @@ function to(ripple) {
 
 function stats(total, name) {
   return function (results) {
-    log(str(results.filter(Boolean).length).green.bold + "/" + str(total).green, "sending", name);
+    log((0, _str2.default)(results.filter(Boolean).length).green.bold + '/' + (0, _str2.default)(total).green, 'sending', name);
   };
 }
 
 function setIP(socket, next) {
-  socket.ip = socket.request.headers["x-forwarded-for"] || socket.request.connection.remoteAddress;
+  socket.ip = socket.request.headers['x-forwarded-for'] || socket.request.connection.remoteAddress;
   next();
 }
 
 function type(ripple) {
   return function (res) {
-    return ripple.types[header("content-type")(res)];
+    return ripple.types[(0, _header2.default)('content-type')(res)];
   };
 }
 
-var identity = _interopRequire(require("utilise/identity"));
-
-var replace = _interopRequire(require("utilise/replace"));
-
-var prepend = _interopRequire(require("utilise/prepend"));
-
-var flatten = _interopRequire(require("utilise/flatten"));
-
-var values = _interopRequire(require("utilise/values"));
-
-var header = _interopRequire(require("utilise/header"));
-
-var client = _interopRequire(require("utilise/client"));
-
-var noop = _interopRequire(require("utilise/noop"));
-
-var keys = _interopRequire(require("utilise/keys"));
-
-var key = _interopRequire(require("utilise/key"));
-
-var str = _interopRequire(require("utilise/str"));
-
-var not = _interopRequire(require("utilise/not"));
-
-var log = _interopRequire(require("utilise/log"));
-
-var err = _interopRequire(require("utilise/err"));
-
-var by = _interopRequire(require("utilise/by"));
-
-var is = _interopRequire(require("utilise/is"));
-
-var diff = require("jsondiffpatch").diff;
-
-log = log("[ri/sync]");
-err = err("[ri/sync]");
-var types = { push: push, remove: remove, update: update },
-    debug = noop;
+var log = require('utilise/log')('[ri/sync]'),
+    err = require('utilise/err')('[ri/sync]'),
+    debug = _noop2.default,
+    types = { push: push, remove: remove, update: update };

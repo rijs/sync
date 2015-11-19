@@ -209,12 +209,10 @@ import keys from 'utilise/keys'
 import key from 'utilise/key'
 import str from 'utilise/str'
 import not from 'utilise/not'
-import log from 'utilise/log'
-import err from 'utilise/err'
 import by from 'utilise/by'
 import is from 'utilise/is'
 import { diff } from 'jsondiffpatch'
-log = log('[ri/sync]')
-err = err('[ri/sync]')
-var types = { push, remove, update }
+var log = require('utilise/log')('[ri/sync]')
+  , err = require('utilise/err')('[ri/sync]')
   , debug = noop
+  , types = { push, remove, update }
