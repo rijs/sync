@@ -8,7 +8,7 @@ export default function sync(ripple, server){
   if (!client) values(ripple.types).map(headers(ripple))
   ripple.stream = stream(ripple)
   ripple.io = io(server)
-  ripple.on('change', ripple.stream())                             // both   - broadcast change to everyone
+  ripple.on('change.stream', ripple.stream())                      // both   - broadcast change to everyone
   ripple.io.on('change', consume(ripple))                          // client - receive change
   ripple.io.on('connection', s => s.on('change', consume(ripple))) // server - receive change
   ripple.io.on('connection', s => ripple.stream(s)())              // server - send all resources to new client
@@ -21,7 +21,7 @@ const stream = ripple => sockets => (name, change) => {
   if (!name) return values(ripple.resources)
     .map(d => stream(ripple)(sockets)(d.name))
 
-  const everyone = client ? [ripple.io] : ripple.io.of('/').sockets
+  const everyone = client ? [ripple.io] : values(ripple.io.of('/').sockets)
       , res = ripple.resources[name]
       , send = to(ripple, change, res)
       , log = count(everyone.length, name)
@@ -64,7 +64,7 @@ const consume = ripple => function([name, change, req]) {
       , types  = ripple.types
       , next   = set(change)
 
-  return !res  && !types[header('content-type')(req)] ? debug('req skip', name)  // rejected - corrupted
+  return !res  && !types[header('content-type')(req)] ? debug('req skip', name)  // rejected - invalid
        : xtype && !xtype.call(socket, req, change)    ? debug('type skip', name) // rejected - by xtype
        : xres  && !xres.call(socket, req, change)     ? debug('res skip', name)  // rejected - by xres
        : !change     ? ripple(silent(req))                                       // accept - replace (new)
@@ -105,11 +105,6 @@ const setIP = (socket, next) => {
   next()
 }
 
-const silent = res => key('headers.silent', true)(res)
-
-const type = ripple => res => ripple.types[header('content-type')(res)] || {}
-
-import identity from 'utilise/identity'
 import values from 'utilise/values'
 import header from 'utilise/header'
 import client from 'utilise/client'
@@ -119,7 +114,8 @@ import set from 'utilise/set'
 import key from 'utilise/key'
 import by from 'utilise/by'
 import is from 'utilise/is'
-import { diff } from 'jsondiffpatch'
-const log = require('utilise/log')('[ri/sync]')
+const type = ripple => res => ripple.types[header('content-type')(res)] || {}
+    , silent = res => key('headers.silent', true)(res)
+    , log = require('utilise/log')('[ri/sync]')
     , err = require('utilise/err')('[ri/sync]')
     , debug = log

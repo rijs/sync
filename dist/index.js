@@ -9,10 +9,6 @@ var _slicedToArray = function () { function sliceIterator(arr, i) { var _arr = [
 
 exports.default = sync;
 
-var _identity = require('utilise/identity');
-
-var _identity2 = _interopRequireDefault(_identity);
-
 var _values = require('utilise/values');
 
 var _values2 = _interopRequireDefault(_values);
@@ -51,8 +47,6 @@ var _is = require('utilise/is');
 
 var _is2 = _interopRequireDefault(_is);
 
-var _jsondiffpatch = require('jsondiffpatch');
-
 /* istanbul ignore next */
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -68,7 +62,7 @@ function sync(ripple, server) {
   if (!_client2.default) (0, _values2.default)(ripple.types).map(headers(ripple));
   ripple.stream = stream(ripple);
   ripple.io = io(server);
-  ripple.on('change', ripple.stream()); // both   - broadcast change to everyone
+  ripple.on('change.stream', ripple.stream()); // both   - broadcast change to everyone
   ripple.io.on('change', consume(ripple)); // client - receive change
   ripple.io.on('connection', function (s) {
     return s.on('change', consume(ripple));
@@ -90,7 +84,7 @@ var stream = function stream(ripple) {
       });
 
 /* istanbul ignore next */
-      var everyone = _client2.default ? [ripple.io] : ripple.io.of('/').sockets,
+      var everyone = _client2.default ? [ripple.io] : (0, _values2.default)(ripple.io.of('/').sockets),
           res = ripple.resources[name],
           send = to(ripple, change, res),
           log = count(everyone.length, name);
@@ -101,7 +95,6 @@ var stream = function stream(ripple) {
 };
 
 // outgoing transforms
-// TODO: in fn body = is.fn(res.body) ? str(res.body) : res.body
 var to = function to(ripple, change, res) {
   return function (socket) {
     var xres = (0, _header2.default)('to')(res),
@@ -118,8 +111,6 @@ var to = function to(ripple, change, res) {
 };
 
 // incoming transforms
-// if (!res) return log('no resource', name) // TODO skip adding new resources on server
-// if (!is.obj(res.body)) return silent(ripple)(req)
 var consume = function consume(ripple) {
   return function (_ref) {
 /* istanbul ignore next */
@@ -138,7 +129,7 @@ var consume = function consume(ripple) {
         types = ripple.types,
         next = (0, _set2.default)(change);
 
-    return !res && !types[(0, _header2.default)('content-type')(req)] ? debug('req skip', name) // rejected - corrupted
+    return !res && !types[(0, _header2.default)('content-type')(req)] ? debug('req skip', name) // rejected - invalid
     : xtype && !xtype.call(socket, req, change) ? debug('type skip', name) // rejected - by xtype
     : xres && !xres.call(socket, req, change) ? debug('res skip', name) // rejected - by xres
     : !change ? ripple(silent(req)) // accept - replace (new)
@@ -182,16 +173,14 @@ var setIP = function setIP(socket, next) {
   next();
 };
 
-var silent = function silent(res) {
-  return (0, _key2.default)('headers.silent', true)(res);
-};
-
 var type = function type(ripple) {
   return function (res) {
     return ripple.types[(0, _header2.default)('content-type')(res)] || {};
   };
-};
-
-var log = require('utilise/log')('[ri/sync]'),
+},
+    silent = function silent(res) {
+  return (0, _key2.default)('headers.silent', true)(res);
+},
+    log = require('utilise/log')('[ri/sync]'),
     err = require('utilise/err')('[ri/sync]'),
     debug = log;
