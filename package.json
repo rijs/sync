@@ -8,7 +8,7 @@
     "url": "git://github.com/rijs/sync.git"
   },
   "scripts": {
-    "ignore": "find ./dist -type f -exec sed -i -E \"s/(function _interopRequire|^.*?_client2|^.*?_noop2|^.*?_slicedToArray|^.*?setIP)/\\/* istanbul ignore next *\\/\\n\\1/g\" {} ';'",
+    "ignore": "find ./dist -type f -exec sed -i -E \"s/(function _interopRequire|^.*?_client2|^.*?_noop2|^.*?_slicedToArray)/\\/* istanbul ignore next *\\/\\n\\1/g\" {} ';'",
     "babel": "babel src -d dist",
     "clean": "rm -rf dist && mkdir dist",
     "build": "npm run clean && npm run babel && npm run ignore",

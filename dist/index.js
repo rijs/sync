@@ -9,6 +9,10 @@ var _slicedToArray = function () { function sliceIterator(arr, i) { var _arr = [
 
 exports.default = sync;
 
+var _identity = require('utilise/identity');
+
+var _identity2 = _interopRequireDefault(_identity);
+
 var _values = require('utilise/values');
 
 var _values2 = _interopRequireDefault(_values);
@@ -26,6 +30,14 @@ var _noop = require('utilise/noop');
 
 /* istanbul ignore next */
 var _noop2 = _interopRequireDefault(_noop);
+
+var _keys = require('utilise/keys');
+
+var _keys2 = _interopRequireDefault(_keys);
+
+var _not = require('utilise/not');
+
+var _not2 = _interopRequireDefault(_not);
 
 var _str = require('utilise/str');
 
@@ -59,7 +71,8 @@ function sync(ripple, server) {
 /* istanbul ignore next */
   if (!_client2.default && !server) return;
 /* istanbul ignore next */
-  if (!_client2.default) (0, _values2.default)(ripple.types).map(headers(ripple));
+  if (!_client2.default) ripple.to = clean(ripple.to), (0, _values2.default)(ripple.types).map(headers(ripple));
+
   ripple.stream = stream(ripple);
   ripple.io = io(server);
   ripple.on('change.stream', ripple.stream()); // both   - broadcast change to everyone
@@ -70,7 +83,6 @@ function sync(ripple, server) {
   ripple.io.on('connection', function (s) {
     return ripple.stream(s)();
   }); // server - send all resources to new client
-/* istanbul ignore next */
   ripple.io.use(setIP);
   return ripple;
 }
@@ -85,28 +97,47 @@ var stream = function stream(ripple) {
 
 /* istanbul ignore next */
       var everyone = _client2.default ? [ripple.io] : (0, _values2.default)(ripple.io.of('/').sockets),
+          log = count(everyone.length, name),
           res = ripple.resources[name],
-          send = to(ripple, change, res),
-          log = count(everyone.length, name);
+          send = to(ripple, res, change);
 
-      return (0, _header2.default)('silent', true)(res) ? delete res.headers.silent : _is2.default.str(sockets) ? (log(everyone.filter((0, _by2.default)('sessionID', sockets)).map(send)), ripple) : !sockets ? (log(everyone.map(send)), ripple) : (log(send(sockets)), ripple);
+      return !res ? log('no resource', name) : _is2.default.str(sockets) ? (log(everyone.filter((0, _by2.default)('sessionID', sockets)).map(send)), ripple) : !sockets ? (log(everyone.map(send)), ripple) : (log(send(sockets)), ripple);
     };
   };
 };
 
 // outgoing transforms
-var to = function to(ripple, change, res) {
+var to = function to(ripple, res, change) {
   return function (socket) {
+    if ((0, _header2.default)('silent', socket)(res)) return delete res.headers.silent, false;
+
     var xres = (0, _header2.default)('to')(res),
-        xtype = type(ripple)(res).to;
+        xtype = type(ripple)(res).to,
+        xall = ripple.to,
+        body,
+        rep,
+        out;
 
-    var body = xres ? xres.call(socket, res, change) : res.body;
-    if (!body) return false;
+    body = res.body;
+    if (xres) {
+      if (!(out = xres.call(socket, res, change))) return false;
+      if (out !== true) {
+        change = false, body = out;
+      }
+    }
 
-    var rep = xtype ? xtype.call(socket, { name: res.name, body: body, headers: res.headers }, change) : { name: res.name, body: body, headers: res.headers };
-    if (!rep) return false;
+    rep = { name: res.name, body: body, headers: res.headers };
+    if (xtype) {
+      if (!(out = xtype.call(socket, rep, change))) return false;
+      if (out !== true) change = false, rep = out;
+    }
 
-    return socket.emit('change', change && (!xres || body === true) ? [res.name, change] : [res.name, false, rep]), true;
+    if (xall) {
+      if (!(out = xall.call(socket, rep, change))) return false;
+      if (out !== true) change = false, rep = out;
+    }
+
+    return socket.emit('change', change ? [res.name, change] : [res.name, false, rep]), true;
   };
 };
 
@@ -118,20 +149,22 @@ var consume = function consume(ripple) {
 
     var name = _ref2[0];
     var change = _ref2[1];
-    var req = _ref2[2];
+    var _ref2$ = _ref2[2];
+    var req = _ref2$ === undefined ? {} : _ref2$;
 
     log('receiving', name);
 
-    var socket = this,
-        res = ripple.resources[name],
+    var res = ripple.resources[name],
+        xall = ripple.from,
         xtype = type(ripple)(res).from || type(ripple)(req).from,
         xres = (0, _header2.default)('from')(res),
         types = ripple.types,
-        next = (0, _set2.default)(change);
+        next = (0, _set2.default)(change),
+        silent = silence(this);
 
-    return !res && !types[(0, _header2.default)('content-type')(req)] ? debug('req skip', name) // rejected - invalid
-    : xtype && !xtype.call(socket, req, change) ? debug('type skip', name) // rejected - by xtype
-    : xres && !xres.call(socket, req, change) ? debug('res skip', name) // rejected - by xres
+    return xall && !xall.call(this, req, change) ? debug('skip all', name) // rejected - by xall
+    : xtype && !xtype.call(this, req, change) ? debug('skip type', name) // rejected - by xtype
+    : xres && !xres.call(this, req, change) ? debug('skip res', name) // rejected - by xres
     : !change ? ripple(silent(req)) // accept - replace (new)
     : !change.key ? ripple(silent({ name: name, body: change.value })) // accept - replace at root
     : (silent(res), next(res.body)); // accept - deep change
@@ -140,7 +173,7 @@ var consume = function consume(ripple) {
 
 var count = function count(total, name) {
   return function (tally) {
-    return log((0, _str2.default)((_is2.default.arr(tally) ? tally : [1]).filter(Boolean).length).green.bold + '/' + (0, _str2.default)(total).green, 'sending', name);
+    return debug((0, _str2.default)((_is2.default.arr(tally) ? tally : [1]).filter(Boolean).length).green.bold + '/' + (0, _str2.default)(total).green, 'sending', name);
   };
 };
 
@@ -167,10 +200,27 @@ var io = function io(opts) {
   return r;
 };
 
-/* istanbul ignore next */
 var setIP = function setIP(socket, next) {
   socket.ip = socket.request.headers['x-forwarded-for'] || socket.request.connection.remoteAddress;
   next();
+};
+
+var clean = function clean(next) {
+  return function (_ref3, change) {
+    var name = _ref3.name;
+    var body = _ref3.body;
+    var headers = _ref3.headers;
+
+    if (change) return next ? next.apply(this, arguments) : true;
+
+    var stripped = {};
+
+    (0, _keys2.default)(headers).filter((0, _not2.default)((0, _is2.default)('silent'))).map(function (header) {
+      return stripped[header] = headers[header];
+    });
+
+    return (next || _identity2.default).apply(this, [{ name: name, body: body, headers: stripped }, change]);
+  };
 };
 
 var type = function type(ripple) {
@@ -178,9 +228,12 @@ var type = function type(ripple) {
     return ripple.types[(0, _header2.default)('content-type')(res)] || {};
   };
 },
-    silent = function silent(res) {
-  return (0, _key2.default)('headers.silent', true)(res);
+    silence = function silence(socket) {
+  return function (res) {
+    return (0, _key2.default)('headers.silent', socket)(res);
+  };
 },
     log = require('utilise/log')('[ri/sync]'),
     err = require('utilise/err')('[ri/sync]'),
-    debug = log;
+/* istanbul ignore next */
+    debug = _noop2.default;
