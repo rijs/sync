@@ -8,11 +8,14 @@
     "url": "git://github.com/rijs/sync.git"
   },
   "scripts": {
-    "ignore": "find ./dist -type f -exec sed -i \"s/function _interopRequire/\\/* istanbul ignore next *\\/\\nfunction _interopRequire/g\" {} ';'",
+    "ignore": "find ./dist -type f -exec sed -i -E \"s/(function _interopRequire|^.*?_client2|^.*?_noop2|^.*?_slicedToArray|^.*?setIP)/\\/* istanbul ignore next *\\/\\n\\1/g\" {} ';'",
     "babel": "babel src -d dist",
     "clean": "rm -rf dist && mkdir dist",
     "build": "npm run clean && npm run babel && npm run ignore",
-    "test": "popper",
+    "test": "istanbul test ./node_modules/mocha/bin/_mocha --report html -- -R spec",
+    "coverage": "istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -R spec && rm -rf ./coverage",
+    "cov": "istanbul cover ./node_modules/mocha/bin/_mocha -- -R spec",
+    "test-popper": "popper",
     "version": "npm run build && git add -A",
     "postversion": "git push && git push --tags"
   },
@@ -22,19 +25,20 @@
     "babel-preset-es2015": "*",
     "browserify": "*",
     "chai": "*",
-    "popper": "*",
     "coveralls": "*",
     "istanbul": "*",
     "mocha": "*",
     "mocha-lcov-reporter": "*",
-    "uglify-js": "*",
+    "mockery": "^1.4.0",
+    "popper": "*",
     "rijs": "*",
     "rijs.core": "*",
     "rijs.css": "*",
     "rijs.data": "*",
     "rijs.fn": "*",
     "rijs.serve": "*",
-    "serve-static": "^1.9.2"
+    "serve-static": "^1.9.2",
+    "uglify-js": "*"
   },
   "dependencies": {
     "jsondiffpatch": "^0.1.31",

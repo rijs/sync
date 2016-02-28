@@ -5,214 +5,121 @@ export default function sync(ripple, server){
   log('creating')
   
   if (!client && !server) return
-  values(ripple.types).map(headers(ripple))
-  ripple.sync = emit(ripple)
+  if (!client) values(ripple.types).map(headers(ripple))
+  ripple.stream = stream(ripple)
   ripple.io = io(server)
-  ripple.on('change', res => emit(ripple)()(res.name))
-  ripple.io.on('change', silent(ripple))
-  ripple.io.on('connection', s => s.on('change', change(ripple)))
-  ripple.io.on('connection', s => emit(ripple)(s)())
+  ripple.on('change', ripple.stream())                             // both   - broadcast change to everyone
+  ripple.io.on('change', consume(ripple))                          // client - receive change
+  ripple.io.on('connection', s => s.on('change', consume(ripple))) // server - receive change
+  ripple.io.on('connection', s => ripple.stream(s)())              // server - send all resources to new client
   ripple.io.use(setIP)
   return ripple
 }
 
-function change(ripple){
-  return function(req){
-    log('receiving', req.name)
-    
-    var socket = this
-      , res    = ripple.resources[req.name]
-      , check  = type(ripple)(req).from || identity
+// send diff to all or some sockets
+const stream = ripple => sockets => (name, change) => {
+  if (!name) return values(ripple.resources)
+    .map(d => stream(ripple)(sockets)(d.name))
 
-    if (!res) return log('no resource', req.name)
-    if (!check.call(this, req)) return debug('type skip', req.name)
-    if (!is.obj(res.body)) return silent(ripple)(req)
+  const everyone = client ? [ripple.io] : ripple.io.of('/').sockets
+      , res = ripple.resources[name]
+      , send = to(ripple, change, res)
+      , log = count(everyone.length, name)
 
-    var to     = header('proxy-to')(res) || identity
-      , from   = header('proxy-from')(res)
-      , body   = to.call(socket, key('body')(res))
-      , deltas = diff(body, req.body)
+  return header('silent', true)(res) ? delete res.headers.silent
+       : is.str(sockets) ? (log(everyone.filter(by('sessionID', sockets)).map(send)), ripple)
+       : !sockets        ? (log(everyone.map(send)), ripple)
+                         : (log(send(sockets)), ripple)
+}
 
-    if (is.arr(deltas)) return delta('') && res.body.emit('change')
+// outgoing transforms
+const to = (ripple, change, res) => socket => {
+  const xres  = header('to')(res)
+      , xtype = type(ripple)(res).to
 
-    keys(deltas)
-      .reverse()
-      .filter(not(is('_t')))
-      .map(paths(deltas))
-      .reduce(flatten, [])
-      .map(delta)
-      .some(Boolean) && res.body.emit('change')
+  const body = xres 
+             ? xres.call(socket, res, change) 
+             : res.body
+  if (!body) return false 
 
-    function delta(k){
-      var d     = key(k)(deltas)
-        , name  = req.name
-        // , body  = res.body
-        , index = k.replace(/(^|\.)_/g, '$1')
-        , type  = d.length == 1 ? 'push'
-                : d.length == 2 ? 'update'
-                : d[2]    === 0 ? 'remove' 
-                                : ''
-        , value = type == 'update' ? d[1] : d[0]
-        , next  = types[type]
+  const rep = xtype 
+            ? xtype.call(socket, { name: res.name, body, headers: res.headers }, change)
+            : { name: res.name, body, headers: res.headers }
+  if (!rep) return false
 
-      if (!type) return false
-      if (!from || from.call(socket, value, body, index, type, name, next)) {
-        !index 
-          ? silent(ripple)(req)
-          : next(index, value, body, name, res)
-        return true
-      }
-    }
+  return socket.emit('change', change && (!xres || body === true)
+    ? [res.name, change] 
+    : [res.name, false, rep])
+    , true
+}
+
+// incoming transforms
+const consume = ripple => function([name, change, req]) {
+  log('receiving', name)
+  
+  const socket = this
+      , res    = ripple.resources[name]
+      , xtype  = type(ripple)(res).from || type(ripple)(req).from
+      , xres   = header('from')(res)
+      , types  = ripple.types
+      , next   = set(change)
+
+  return !res  && !types[header('content-type')(req)] ? debug('req skip', name)  // rejected - corrupted
+       : xtype && !xtype.call(socket, req, change)    ? debug('type skip', name) // rejected - by xtype
+       : xres  && !xres.call(socket, req, change)     ? debug('res skip', name)  // rejected - by xres
+       : !change     ? ripple(silent(req))                                       // accept - replace (new)
+       : !change.key ? ripple(silent({ name, body: change.value }))              // accept - replace at root
+                     : (silent(res), next(res.body))                             // accept - deep change
+}
+
+const count = (total, name) => tally => log(
+  str((is.arr(tally) ? tally : [1]).filter(Boolean).length).green.bold + '/' 
++ str(total).green
+, 'sending', name
+)
+
+const headers = ripple => type => {
+  const parse = type.parse || noop 
+  type.parse = function(res){
+    const existing = ripple.resources[res.name]
+        , from = header('from')(res) || header('from')(existing)
+        , to   = header('to')(res)   || header('to')(existing)
+    if (from) res.headers.from = from
+    if (to)   res.headers.to   = to
+    return parse.apply(this, arguments), res
   }
 }
 
-function paths(base){
-  return function(k){
-    var d = key(k)(base)
-    k = is.arr(k) ? k : [k]
-
-    return is.arr(d) ? k.join('.')
-         : keys(d)
-             .map(prepend(k.join('.') + '.'))
-             .map(paths(base))
-  }
-}
-
-function push(k, value, body, name) {
-  var path = k.split('.')
-    , tail = path.pop()
-    , o    = key(path.join('.'))(body) || body
-
-  is.arr(o)
-    ? o.splice(tail, 0, value) 
-    : key(k, value)(body)
-}
-
-function remove(k, value, body, name) {
-  var path = k.split('.')
-    , tail = path.pop()
-    , o    = key(path.join('.'))(body) || body
-
-  is.arr(o)
-    ? o.splice(tail, 1) 
-    : delete o[tail]
-}
-
-function update(k, value, body, name) {
-  key(k, value)(body)
-}
-
-function headers(ripple){
-  return type => {
-    var parse = type.parse || noop 
-    type.parse = function(res){
-      if (client) return parse.apply(this, arguments), res
-      var existing = ripple.resources[res.name]
-        , from = header('proxy-from')(existing)
-        , to = header('proxy-to')(existing)
-        
-      res.headers['proxy-from'] = header('proxy-from')(res) || header('from')(res) || from
-      res.headers['proxy-to']   = header('proxy-to')(res)   || header('to')(res)   || to 
-      return parse.apply(this, arguments), res
-    }
-  }
-}
-
-function silent(ripple) {
-  return res => (res.headers.silent = true, ripple(res))
-}
-
-function io(opts){
-  var r = !client ? require('socket.io')(opts.server || opts)
-        : window.io ? window.io()
-        : is.fn(require('socket.io-client')) ? require('socket.io-client')()
-        : { on: noop, emit: noop }
+const io = opts => {
+  const r = !client ? require('socket.io')(opts.server || opts)
+          : window.io ? window.io()
+          : is.fn(require('socket.io-client')) ? require('socket.io-client')()
+          : { on: noop, emit: noop }
   r.use = r.use || noop
   return r
 }
 
-// emit all or some resources, to all or some clients
-function emit(ripple) {
-  return function(socket){
-    return function (name) {
-      if (arguments.length && !name) return 
-      if (!name) return values(ripple.resources)
-                          .map(key('name'))
-                          .map(emit(ripple)(socket))
-                      , ripple
-
-      var res = ripple.resources[name]
-        , sockets = client ? [ripple.io] : ripple.io.of('/').sockets
-        , lgt  = stats(sockets.length, name)
-        , silent = header('silent', true)(res)
-
-      return silent         ? delete res.headers.silent
-           : !res           ? log('no resource to emit: ', name)
-           : is.str(socket) ? lgt(sockets.filter(by('sessionID', socket)).map(to(ripple)(res)))
-           : !socket        ? lgt(sockets.map(to(ripple)(res)))
-                            : lgt([to(ripple)(res)(socket)])
-    }
-  }
-}
-
-function to(ripple) {
-  return res => {
-    return socket => {
-      var body = is.fn(res.body) ? '' + res.body : res.body
-        , rep
-        , fn = {
-            type: type(ripple)(res).to || identity
-          , res: res.headers['proxy-to'] || identity
-          }
-
-      body = fn.res.call(socket, body)
-      if (!body) return false 
-
-      rep = fn.type.call(socket, { name: res.name, body, headers: res.headers }) 
-      if (!rep) return false
-
-      socket.emit('change', rep)
-      return true
-    }
-  }
-}
-
-function stats(total, name){
-  return function(results){
-    log(
-      str(results.filter(Boolean).length).green.bold + '/' 
-    + str(total).green
-    , 'sending', name
-    )
-  }
-}
-
-function setIP(socket, next){
+const setIP = (socket, next) => {
   socket.ip = socket.request.headers['x-forwarded-for'] 
            || socket.request.connection.remoteAddress
   next()
 }
 
-function type(ripple){
-  return res => ripple.types[header('content-type')(res)]
-}
+const silent = res => key('headers.silent', true)(res)
+
+const type = ripple => res => ripple.types[header('content-type')(res)] || {}
 
 import identity from 'utilise/identity'
-import replace from 'utilise/replace'
-import prepend from 'utilise/prepend'
-import flatten from 'utilise/flatten'
 import values from 'utilise/values'
 import header from 'utilise/header'
 import client from 'utilise/client'
 import noop from 'utilise/noop'
-import keys from 'utilise/keys'
-import key from 'utilise/key'
 import str from 'utilise/str'
-import not from 'utilise/not'
+import set from 'utilise/set'
+import key from 'utilise/key'
 import by from 'utilise/by'
 import is from 'utilise/is'
 import { diff } from 'jsondiffpatch'
-var log = require('utilise/log')('[ri/sync]')
-  , err = require('utilise/err')('[ri/sync]')
-  , debug = noop
-  , types = { push, remove, update }
+const log = require('utilise/log')('[ri/sync]')
+    , err = require('utilise/err')('[ri/sync]')
+    , debug = log
