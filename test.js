@@ -428,28 +428,28 @@ describe('Sync', function(){
     // new
     receive.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
     expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // replace
     receive.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
     expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // diff
     receive.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
     expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // deep diff
     receive.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
     expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
@@ -476,28 +476,28 @@ describe('Sync', function(){
     // new
     receive.call(socket, ['foo', { type: 'update', value: { foo: 'sth' }}]) 
     expect(change).to.be.eql({ type: 'update', value: { foo: 'sth' }})
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'sth' })
     expect(emitted).to.be.not.ok
 
     // replace
     receive.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
     expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'baz' })
     expect(emitted).to.be.not.ok
 
     // diff
     receive.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
     expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo' })
     expect(emitted).to.be.not.ok
 
     // deep diff
     receive.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
     expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo', bar: { foo: 'wat' } })
     expect(emitted).to.be.not.ok
 
@@ -525,28 +525,28 @@ describe('Sync', function(){
     // new
     receive.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
     expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // replace
     receive.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
     expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // diff
     receive.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
     expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // deep diff
     receive.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
     expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
@@ -573,28 +573,28 @@ describe('Sync', function(){
     // new
     receive.call(socket, ['foo', { type: 'update', value: { foo: 'sth' }}]) 
     expect(change).to.be.eql({ type: 'update', value: { foo: 'sth' }})
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'sth' })
     expect(emitted).to.be.not.ok
 
     // replace
     receive.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
     expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'baz' })
     expect(emitted).to.be.not.ok
 
     // diff
     receive.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
     expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo' })
     expect(emitted).to.be.not.ok
 
     // deep diff
     receive.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
     expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo', bar: { foo: 'wat' } })
     expect(emitted).to.be.not.ok
 
@@ -622,28 +622,28 @@ describe('Sync', function(){
     // new
     receive.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
     expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // replace
     receive.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
     expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // diff
     receive.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
     expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // deep diff
     receive.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
     expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
@@ -671,28 +671,28 @@ describe('Sync', function(){
     // new
     receive.call(socket, ['foo', { type: 'update', value: { foo: 'sth' }}]) 
     expect(change).to.be.eql({ type: 'update', value: { foo: 'sth' }})
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'sth' })
     expect(emitted).to.be.not.ok
 
     // replace
     receive.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
     expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'baz' })
     expect(emitted).to.be.not.ok
 
     // diff
     receive.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
     expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo' })
     expect(emitted).to.be.not.ok
 
     // deep diff
     receive.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
     expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
-    expect(res).to.be.eql(undefined)
+    expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo', bar: { foo: 'wat' } })
     expect(emitted).to.be.not.ok
 
