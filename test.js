@@ -10,6 +10,7 @@ var core     = require('rijs.core').default
   , key      = require('utilise/key')
   , pop      = require('utilise/pop')
   , str      = require('utilise/str')
+  , is       = require('utilise/is')
   , expect   = require('chai').expect
   , mockery  = require('mockery')
   , socket   = { emit: function(type, data){ return socket.emitted = emitted = [type, data]}, request: { headers: { 'x-forwarded-for': 10 }}}
@@ -49,7 +50,7 @@ describe('Sync', function(){
   it('should stream new resource', function(){  
     var ripple = sync(data(core()), { server: { foo: 'bar' }})
     ripple('foo', { foo: 'bar' }) 
-    expect(emitted).to.eql(['change', ['foo', { type: 'update', value: { foo: 'bar' }}]])
+    expect(emitted).to.eql(['change', ['foo', { time: 0, type: 'update', value: { foo: 'bar' }}]])
   })
 
   it('should stream change', function(){  
@@ -57,22 +58,22 @@ describe('Sync', function(){
     
     // new
     ripple('foo', { foo: 'bar' }) 
-    expect(emitted).to.eql(['change', ['foo', { type: 'update', value: { foo: 'bar' }}]])
+    expect(emitted).to.eql(['change', ['foo', { time: 0, type: 'update', value: { foo: 'bar' }}]])
     expect(ripple.resources.foo.body).to.eql({ foo: 'bar' })
 
     // replace    
     ripple('foo', { foo: 'baz' }) 
-    expect(emitted).to.eql(['change', ['foo', { type: 'update', value: { foo: 'baz' }}]])
+    expect(emitted).to.eql(['change', ['foo', { time: 1, type: 'update', value: { foo: 'baz' }}]])
     expect(ripple.resources.foo.body).to.eql({ foo: 'baz' })
 
     // diff
     update('foo', 'boo')(ripple('foo'))
-    expect(emitted).to.eql(['change', ['foo', { key: 'foo', type: 'update', value: 'boo' }]])
+    expect(emitted).to.eql(['change', ['foo', { time: 2, type: 'update', key: 'foo', value: 'boo' }]])
     expect(ripple.resources.foo.body).to.eql({ foo: 'boo' })
 
     // deep diff
     update('bar.foo', 'wat')(ripple('foo'))
-    expect(emitted).to.eql(['change', ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }]])
+    expect(emitted).to.eql(['change', ['foo', { time: 3, type: 'update', key: 'bar.foo', value: 'wat' }]])
     expect(ripple.resources.foo.body).to.eql({ foo: 'boo', bar: { foo: 'wat' } })
   })
 
@@ -83,25 +84,25 @@ describe('Sync', function(){
     // new
     ripple('foo', { foo: 'bar' }, { to: block }) 
     expect(emitted).to.be.not.ok
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
+    expect(change).to.be.eql({ time: 0, type: 'update', value: { foo: 'bar' }})
     expect(res).to.be.eql(ripple.resources.foo)
 
     // replace
     ripple('foo', { foo: 'baz' })
     expect(emitted).to.be.not.ok
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
+    expect(change).to.be.eql({ time: 1, type: 'update', value: { foo: 'baz' }})
     expect(res).to.be.eql(ripple.resources.foo)
   
     // diff
     update('foo', 'boo')(ripple('foo'))
     expect(emitted).to.be.not.ok
-    expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
+    expect(change).to.be.eql({ time: 2, type: 'update', key: 'foo', value: 'boo' })
     expect(res).to.be.eql(ripple.resources.foo)
 
     // deep diff
     update('bar.foo', 'wat')(ripple('foo'))
     expect(emitted).to.be.not.ok
-    expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
+    expect(change).to.be.eql({ time: 3, type: 'update', key: 'bar.foo', value: 'wat' })
     expect(res).to.be.eql(ripple.resources.foo)
 
     function block(r, c) {
@@ -117,26 +118,26 @@ describe('Sync', function(){
 
     // new
     ripple('foo', { foo: 'bar' }, { to: pass }) 
-    expect(emitted).to.eql(['change', ['foo', { type: 'update', value: { foo: 'bar' }}]])
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
+    expect(emitted).to.eql(['change', ['foo', { time: 0, type: 'update', value: { foo: 'bar' }}]])
+    expect(change).to.be.eql({ time: 0, type: 'update', value: { foo: 'bar' }})
     expect(res).to.be.eql(ripple.resources.foo)
 
     // replace
     ripple('foo', { foo: 'baz' })
-    expect(emitted).to.eql(['change', ['foo', { type: 'update', value: { foo: 'baz' }}]])
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
+    expect(emitted).to.eql(['change', ['foo', { time: 1, type: 'update', value: { foo: 'baz' }}]])
+    expect(change).to.be.eql({ time: 1, type: 'update', value: { foo: 'baz' }})
     expect(res).to.be.eql(ripple.resources.foo)
   
     // diff
     update('foo', 'boo')(ripple('foo'))
-    expect(emitted).to.eql(['change', ['foo', { key: 'foo', type: 'update', value: 'boo' }]])
-    expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
+    expect(emitted).to.eql(['change', ['foo', { time: 2, type: 'update', key: 'foo', value: 'boo' }]])
+    expect(change).to.be.eql({ time: 2, type: 'update', key: 'foo', value: 'boo' })
     expect(res).to.be.eql(ripple.resources.foo)
 
     // deep diff
     update('bar.foo', 'wat')(ripple('foo'))
-    expect(emitted).to.eql(['change', ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }]])
-    expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
+    expect(emitted).to.eql(['change', ['foo', { time: 3, type: 'update', key: 'bar.foo', value: 'wat' }]])
+    expect(change).to.be.eql({ time: 3, type: 'update', key: 'bar.foo', value: 'wat' })
     expect(res).to.be.eql(ripple.resources.foo)
 
     function pass(r, c) {
@@ -153,7 +154,7 @@ describe('Sync', function(){
     // new
     ripple('foo', { foo: 'bar' }, { to: transform }) 
     expect(res).to.be.eql(ripple.resources.foo)
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
+    expect(change).to.be.eql({ time: 0, type: 'update', value: { foo: 'bar' }})
     expect(clone(emitted)).to.be.eql(['change', ['foo', false, {
       body: 3
     , headers: { 'content-type': 'application/data' }
@@ -163,7 +164,7 @@ describe('Sync', function(){
     // replace
     ripple('foo', { foo: 'bazoo' })
     expect(res).to.be.eql(ripple.resources.foo)
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'bazoo' }})
+    expect(change).to.be.eql({ time: 1, type: 'update', value: { foo: 'bazoo' }})
     expect(clone(emitted)).to.be.eql(['change', ['foo', false, {
       body: 5
     , headers: { 'content-type': 'application/data' }
@@ -173,7 +174,7 @@ describe('Sync', function(){
     // diff
     update('foo', 'booo')(ripple('foo'))
     expect(res).to.be.eql(ripple.resources.foo)
-    expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'booo' })
+    expect(change).to.be.eql({ time: 2, type: 'update', key: 'foo', value: 'booo' })
     expect(clone(emitted)).to.be.eql(['change', ['foo', false, {
       body: 4
     , headers: { 'content-type': 'application/data' }
@@ -183,7 +184,7 @@ describe('Sync', function(){
     // deep diff
     update('bar.foo', 'w')(ripple('foo'))
     expect(res).to.be.eql(ripple.resources.foo)
-    expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'w' })
+    expect(change).to.be.eql({ time: 3, type: 'update', key: 'bar.foo', value: 'w' })
     expect(clone(emitted)).to.be.eql(['change', ['foo', false, {
       body: 1
     , headers: { 'content-type': 'application/data' }
@@ -205,25 +206,25 @@ describe('Sync', function(){
     ripple.types['application/data'].to = type
     ripple('foo', { foo: 'bar' }) 
     expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
+    expect(change).to.be.eql({ time: 0, type: 'update', value: { foo: 'bar' }})
     expect(res).to.be.eql(ripple.resources.foo)
 
     // replace
     ripple('foo', { foo: 'baz' })
     expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
+    expect(change).to.be.eql({ time: 1, type: 'update', value: { foo: 'baz' }})
     expect(res).to.be.eql(ripple.resources.foo)
   
     // diff
     update('foo', 'boo')(ripple('foo'))
     expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
+    expect(change).to.be.eql({ time: 2, type: 'update', key: 'foo', value: 'boo' })
     expect(res).to.be.eql(ripple.resources.foo)
 
     // deep diff
     update('bar.foo', 'wat')(ripple('foo'))
     expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
+    expect(change).to.be.eql({ time: 3, type: 'update', key: 'bar.foo', value: 'wat' })
     expect(res).to.be.eql(ripple.resources.foo)
 
     function type(r, c) {
@@ -240,26 +241,26 @@ describe('Sync', function(){
     // new
     ripple.types['application/data'].to = type
     ripple('foo', { foo: 'bar' }) 
-    expect(emitted).to.eql(['change', ['foo', { type: 'update', value: { foo: 'bar' }}]])
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
+    expect(emitted).to.eql(['change', ['foo', { time: 0, type: 'update', value: { foo: 'bar' }}]])
+    expect(change).to.be.eql({ time: 0, type: 'update', value: { foo: 'bar' }})
     expect(res).to.be.eql(ripple.resources.foo)
 
     // replace
     ripple('foo', { foo: 'baz' })
-    expect(emitted).to.eql(['change', ['foo', { type: 'update', value: { foo: 'baz' }}]])
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
+    expect(emitted).to.eql(['change', ['foo', { time: 1, type: 'update', value: { foo: 'baz' }}]])
+    expect(change).to.be.eql({ time: 1, type: 'update', value: { foo: 'baz' }})
     expect(res).to.be.eql(ripple.resources.foo)
   
     // diff
     update('foo', 'boo')(ripple('foo'))
-    expect(emitted).to.eql(['change', ['foo', { key: 'foo', type: 'update', value: 'boo' }]])
-    expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
+    expect(emitted).to.eql(['change', ['foo', { time: 2, type: 'update', key: 'foo', value: 'boo' }]])
+    expect(change).to.be.eql({ time: 2, type: 'update', key: 'foo', value: 'boo' })
     expect(res).to.be.eql(ripple.resources.foo)
 
     // deep diff
     update('bar.foo', 'wat')(ripple('foo'))    
-    expect(emitted).to.eql(['change', ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }]])
-    expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
+    expect(emitted).to.eql(['change', ['foo', { time: 3, type: 'update', key: 'bar.foo', value: 'wat' }]])
+    expect(change).to.be.eql({ time: 3, type: 'update', key: 'bar.foo', value: 'wat' })
     expect(res).to.be.eql(ripple.resources.foo)
 
     function type(r, c) {
@@ -277,25 +278,25 @@ describe('Sync', function(){
     ripple.to = type
     ripple('foo', { foo: 'bar' }) 
     expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
+    expect(change).to.be.eql({ time: 0, type: 'update', value: { foo: 'bar' }})
     expect(res).to.be.eql(ripple.resources.foo)
 
     // replace
     ripple('foo', { foo: 'baz' })
     expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
+    expect(change).to.be.eql({ time: 1, type: 'update', value: { foo: 'baz' }})
     expect(res).to.be.eql(ripple.resources.foo)
   
     // diff
     update('foo', 'boo')(ripple('foo'))
     expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
+    expect(change).to.be.eql({ time: 2, type: 'update', key: 'foo', value: 'boo' })
     expect(res).to.be.eql(ripple.resources.foo)
 
     // deep diff
     update('bar.foo', 'wat')(ripple('foo'))
     expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
+    expect(change).to.be.eql({ time: 3, type: 'update', key: 'bar.foo', value: 'wat' })
     expect(res).to.be.eql(ripple.resources.foo)
 
     function type(r, c) {
@@ -312,26 +313,26 @@ describe('Sync', function(){
     // new
     ripple.to = type
     ripple('foo', { foo: 'bar' }) 
-    expect(emitted).to.eql(['change', ['foo', { type: 'update', value: { foo: 'bar' }}]])
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
+    expect(emitted).to.eql(['change', ['foo', { time: 0, type: 'update', value: { foo: 'bar' }}]])
+    expect(change).to.be.eql({ time: 0, type: 'update', value: { foo: 'bar' }})
     expect(res).to.be.eql(ripple.resources.foo)
 
     // replace
     ripple('foo', { foo: 'baz' })
-    expect(emitted).to.eql(['change', ['foo', { type: 'update', value: { foo: 'baz' }}]])
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
+    expect(emitted).to.eql(['change', ['foo', { time: 1, type: 'update', value: { foo: 'baz' }}]])
+    expect(change).to.be.eql({ time: 1, type: 'update', value: { foo: 'baz' }})
     expect(res).to.be.eql(ripple.resources.foo)
   
     // diff
     update('foo', 'boo')(ripple('foo'))
-    expect(emitted).to.eql(['change', ['foo', { key: 'foo', type: 'update', value: 'boo' }]])
-    expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
+    expect(emitted).to.eql(['change', ['foo', { time: 2, type: 'update', key: 'foo', value: 'boo' }]])
+    expect(change).to.be.eql({ time: 2, type: 'update', key: 'foo', value: 'boo' })
     expect(res).to.be.eql(ripple.resources.foo)
 
     // deep diff
     update('bar.foo', 'wat')(ripple('foo'))    
-    expect(emitted).to.eql(['change', ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }]])
-    expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
+    expect(emitted).to.eql(['change', ['foo', { time: 3, type: 'update', key: 'bar.foo', value: 'wat' }]])
+    expect(change).to.be.eql({ time: 3, type: 'update', key: 'bar.foo', value: 'wat' })
     expect(res).to.be.eql(ripple.resources.foo)
 
     function type(r, c) {
@@ -353,7 +354,7 @@ describe('Sync', function(){
     expect(emitted).to.eql([ 
       { 0: 'change', 1: [ 'foo', false, { name: 'foo', headers: {'content-type': 'application/data'}, body: { foo: 'bar' }} ] }
     , { 0: 'change', 1: [ 'bar', false, { name: 'bar', headers: {'content-type': 'application/data'}, body: { bar: 'foo' }} ] }
-    , { 0: 'change', 1: [ 'baz', false, { name: 'baz', headers: {'content-type': 'application/data'}, body: { baz: 'boo' }} ] } 
+    , { 0: 'change', 1: [ 'baz', false, { name: 'baz', headers: {'content-type': 'application/data'}, body: { baz: 'boo' }} ] }
     ])
   })
 
@@ -502,8 +503,8 @@ describe('Sync', function(){
     expect(emitted).to.be.not.ok
 
     function type(r, c) {
-      return change = c
-           , res = r
+      return change = is.obj(c) && clone(c)
+           , res = is.obj(r) && clone(r)
            , true
     }
   })
@@ -599,8 +600,8 @@ describe('Sync', function(){
     expect(emitted).to.be.not.ok
 
     function type(r, c) {
-      return change = c
-           , res = r
+      return change = is.obj(c) && clone(c)
+           , res = is.obj(r) && clone(r)
            , true
     }
   })
@@ -665,7 +666,7 @@ describe('Sync', function(){
     receive.call(socket, ['foo', false, { name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }}])
     expect(change).to.be.eql(false)
     expect(clone(res)).to.be.eql({ name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }})
-    expect(ripple.resources.foo).to.be.eql(res)
+    expect(clone(ripple.resources.foo)).to.be.eql(res)
     expect(emitted).to.be.not.ok
 
     // new
@@ -697,8 +698,8 @@ describe('Sync', function(){
     expect(emitted).to.be.not.ok
 
     function pass(r, c) {
-      return change = c
-           , res = r
+      return change = is.obj(c) && clone(c)
+           , res = is.obj(r) && clone(r)
            , true
     }
   })
@@ -709,7 +710,7 @@ describe('Sync', function(){
 
     receive.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
     expect(ripple.resources.foo.body).to.eql({ foo: 'bar' })
-    expect(other.emitted).to.be.eql(['change', ['foo', { type: 'update', value: { foo: 'bar' }}]])
+    expect(other.emitted).to.be.eql(['change', ['foo', { time: 0, type: 'update', value: { foo: 'bar' }}]])
     expect(socket.emitted).to.be.not.ok
   })
  

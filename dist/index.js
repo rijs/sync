@@ -71,12 +71,16 @@ function sync(ripple, server) {
 /* istanbul ignore next */
   if (!_client2.default && !server) return;
 /* istanbul ignore next */
-  if (!_client2.default) ripple.to = clean(ripple.to), (0, _values2.default)(ripple.types).map(headers(ripple));
+  if (!_client2.default) ripple.to = clean(ripple.to), (0, _values2.default)(ripple.types).map(function (type) {
+    return type.parse = headers(ripple)(type.parse);
+  });
 
   ripple.stream = stream(ripple);
+  ripple.respond = respond(ripple);
   ripple.io = io(server);
   ripple.on('change.stream', ripple.stream()); // both   - broadcast change to everyone
   ripple.io.on('change', consume(ripple)); // client - receive change
+  ripple.io.on('response', response(ripple)); // client - receive response
   ripple.io.on('connection', function (s) {
     return s.on('change', consume(ripple));
   }); // server - receive change
@@ -86,6 +90,27 @@ function sync(ripple, server) {
   ripple.io.use(setIP);
   return ripple;
 }
+
+var respond = function respond(ripple) {
+  return function (socket, name, time) {
+    return function (reply) {
+      socket.emit('response', [name, time, reply]);
+    };
+  };
+};
+
+var response = function response(ripple) {
+  return function (_ref) {
+/* istanbul ignore next */
+    var _ref2 = _slicedToArray(_ref, 3);
+
+    var name = _ref2[0];
+    var time = _ref2[1];
+    var reply = _ref2[2];
+
+    ripple.resources[name].body.emit('response._' + time, reply);
+  };
+};
 
 // send diff to all or some sockets
 var stream = function stream(ripple) {
@@ -143,28 +168,29 @@ var to = function to(ripple, res, change) {
 
 // incoming transforms
 var consume = function consume(ripple) {
-  return function (_ref) {
+  return function (_ref3) {
 /* istanbul ignore next */
-    var _ref2 = _slicedToArray(_ref, 3);
+    var _ref4 = _slicedToArray(_ref3, 3);
 
-    var name = _ref2[0];
-    var change = _ref2[1];
-    var _ref2$ = _ref2[2];
-    var req = _ref2$ === undefined ? {} : _ref2$;
+    var name = _ref4[0];
+    var change = _ref4[1];
+    var _ref4$ = _ref4[2];
+    var req = _ref4$ === undefined ? {} : _ref4$;
 
     log('receiving', name);
 
     var res = ripple.resources[name],
         xall = ripple.from,
-        xtype = type(ripple)(res).from || type(ripple)(req).from,
+        xtype = type(ripple)(res).from || type(ripple)(req).from // is latter needed?
+    ,
         xres = (0, _header2.default)('from')(res),
-        types = ripple.types,
         next = (0, _set2.default)(change),
-        silent = silence(this);
+        silent = silence(this),
+        respond = ripple.respond(this, name, change.time);
 
-    return xall && !xall.call(this, req, change) ? debug('skip all', name) // rejected - by xall
-    : xtype && !xtype.call(this, req, change) ? debug('skip type', name) // rejected - by xtype
-    : xres && !xres.call(this, req, change) ? debug('skip res', name) // rejected - by xres
+    return xall && !xall.call(this, req, change, respond) ? debug('skip all', name) // rejected - by xall
+    : xtype && !xtype.call(this, req, change, respond) ? debug('skip type', name) // rejected - by xtype
+    : xres && !xres.call(this, req, change, respond) ? debug('skip res', name) // rejected - by xres
     : !change ? ripple(silent(req)) // accept - replace (new)
     : !change.key ? ripple(silent({ name: name, body: change.value })) // accept - replace at root
     : (silent(res), next(res.body)); // accept - deep change
@@ -178,16 +204,14 @@ var count = function count(total, name) {
 };
 
 var headers = function headers(ripple) {
-  return function (type) {
-/* istanbul ignore next */
-    var parse = type.parse || _noop2.default;
-    type.parse = function (res) {
+  return function (next) {
+    return function (res) {
       var existing = ripple.resources[res.name],
           from = (0, _header2.default)('from')(res) || (0, _header2.default)('from')(existing),
           to = (0, _header2.default)('to')(res) || (0, _header2.default)('to')(existing);
       if (from) res.headers.from = from;
       if (to) res.headers.to = to;
-      return parse.apply(this, arguments), res;
+      return next ? next(res) : res;
     };
   };
 };
@@ -206,10 +230,10 @@ var setIP = function setIP(socket, next) {
 };
 
 var clean = function clean(next) {
-  return function (_ref3, change) {
-    var name = _ref3.name;
-    var body = _ref3.body;
-    var headers = _ref3.headers;
+  return function (_ref5, change) {
+    var name = _ref5.name;
+    var body = _ref5.body;
+    var headers = _ref5.headers;
 
     if (change) return next ? next.apply(this, arguments) : true;
 

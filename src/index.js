@@ -7,16 +7,26 @@ export default function sync(ripple, server){
   if (!client && !server) return
   if (!client) 
     ripple.to = clean(ripple.to)
-  , values(ripple.types).map(headers(ripple))
+  , values(ripple.types).map(type => type.parse = headers(ripple)(type.parse))
 
   ripple.stream = stream(ripple)
+  ripple.respond = respond(ripple)
   ripple.io = io(server)
   ripple.on('change.stream', ripple.stream())                      // both   - broadcast change to everyone
   ripple.io.on('change', consume(ripple))                          // client - receive change
+  ripple.io.on('response', response(ripple))                       // client - receive response
   ripple.io.on('connection', s => s.on('change', consume(ripple))) // server - receive change
   ripple.io.on('connection', s => ripple.stream(s)())              // server - send all resources to new client
   ripple.io.use(setIP)
   return ripple
+}
+
+const respond = ripple => (socket, name, time) => reply => {
+  socket.emit('response', [ name, time, reply ])
+}
+
+const response = ripple => function([ name, time, reply ]) {
+  ripple.resources[name].body.emit('response._' + time, reply)
 }
 
 // send diff to all or some sockets
@@ -71,17 +81,17 @@ const to = (ripple, res, change) => socket => {
 const consume = ripple => function([name, change, req = {}]) {
   log('receiving', name)
   
-  const res    = ripple.resources[name]
-      , xall   = ripple.from
-      , xtype  = type(ripple)(res).from || type(ripple)(req).from
-      , xres   = header('from')(res)
-      , types  = ripple.types
-      , next   = set(change)
-      , silent = silence(this)
+  const res     = ripple.resources[name]
+      , xall    = ripple.from
+      , xtype   = type(ripple)(res).from || type(ripple)(req).from // is latter needed?
+      , xres    = header('from')(res)
+      , next    = set(change)
+      , silent  = silence(this)
+      , respond = ripple.respond(this, name, change.time)
 
-  return xall  &&  !xall.call(this, req, change) ? debug('skip all' , name) // rejected - by xall
-       : xtype && !xtype.call(this, req, change) ? debug('skip type', name) // rejected - by xtype
-       : xres  &&  !xres.call(this, req, change) ? debug('skip res' , name) // rejected - by xres
+  return xall  &&  !xall.call(this, req, change, respond) ? debug('skip all' , name) // rejected - by xall
+       : xtype && !xtype.call(this, req, change, respond) ? debug('skip type', name) // rejected - by xtype
+       : xres  &&  !xres.call(this, req, change, respond) ? debug('skip res' , name) // rejected - by xres
        : !change     ? ripple(silent(req))                                  // accept - replace (new)
        : !change.key ? ripple(silent({ name, body: change.value }))         // accept - replace at root
                      : (silent(res), next(res.body))                        // accept - deep change
@@ -93,16 +103,13 @@ const count = (total, name) => tally => debug(
 , 'sending', name
 )
 
-const headers = ripple => type => {
-  const parse = type.parse || noop 
-  type.parse = function(res){
-    const existing = ripple.resources[res.name]
-        , from = header('from')(res) || header('from')(existing)
-        , to   = header('to')(res)   || header('to')(existing)
-    if (from) res.headers.from = from
-    if (to)   res.headers.to   = to
-    return parse.apply(this, arguments), res
-  }
+const headers = ripple => next => res => {
+  const existing = ripple.resources[res.name]
+      , from = header('from')(res) || header('from')(existing)
+      , to   = header('to')(res)   || header('to')(existing)
+  if (from) res.headers.from = from
+  if (to)   res.headers.to   = to
+  return next ? next(res) : res
 }
 
 const io = opts => {
