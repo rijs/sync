@@ -1,5 +1,5 @@
 // -------------------------------------------
-// API: Synchronises resources between server/client
+// Synchronises resources between server/client
 // -------------------------------------------
 export default function sync(ripple, server){
   log('creating')
