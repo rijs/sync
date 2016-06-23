@@ -11,11 +11,12 @@ var core     = require('rijs.core').default
   , pop      = require('utilise/pop')
   , str      = require('utilise/str')
   , is       = require('utilise/is')
+  , to       = require('utilise/to')
   , expect   = require('chai').expect
   , mockery  = require('mockery')
-  , socket   = { emit: function(type, data){ return socket.emitted = emitted = [type, data]}, request: { headers: { 'x-forwarded-for': 10 }}}
-  , other    = { emit: function(type, data){ return other.emitted = [type, data]}, request: { headers: {}, connection: { 'remoteAddress': 10 }} }
-  , sockets, opts, emitted, connection, receive
+  , socket   = { emit: function(){ return socket.emitted = emitted = to.arr(arguments)}, request: { headers: { 'x-forwarded-for': 10 }}}
+  , other    = { emit: function(){ return other.emitted = to.arr(arguments)}, request: { headers: {}, connection: { 'remoteAddress': 10 }} }
+  , sockets, opts, emitted, connection, receiveChange, receiveResponse
 
 describe('Sync', function(){
 
@@ -381,7 +382,7 @@ describe('Sync', function(){
     var ripple = sync(data(core()), { server: { foo: 'bar' }})
     
     // new
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
     expect(ripple.resources.foo).to.eql({ 
       name: 'foo'
     , body: { foo: 'bar' }
@@ -390,17 +391,17 @@ describe('Sync', function(){
     expect(emitted).to.be.not.ok
 
     // replace
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
     expect(ripple.resources.foo.body).to.eql({ foo: 'baz' })
     expect(emitted).to.be.not.ok
 
     // diff
-    receive.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
+    receiveChange.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
     expect(ripple.resources.foo.body).to.eql({ foo: 'boo' })
     expect(emitted).to.be.not.ok
 
     // deep diff
-    receive.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
+    receiveChange.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
     expect(ripple.resources.foo.body).to.eql({ foo: 'boo', bar: { foo: 'wat' } })
     expect(emitted).to.be.not.ok
   })
@@ -412,7 +413,7 @@ describe('Sync', function(){
     ripple.from = type
 
     // ignore
-    receive.call(socket, ['foo', false, { name: 'foo', body: {}, headers: { 'content-type': 'application/data' }}])
+    receiveChange.call(socket, ['foo', false, { name: 'foo', body: {}, headers: { 'content-type': 'application/data' }}])
     expect(change).to.be.eql(false)
     expect(res).to.be.eql({ name: 'foo', body: {}, headers: { 'content-type': 'application/data' }})
     expect(ripple.resources.foo).to.be.not.ok
@@ -420,35 +421,35 @@ describe('Sync', function(){
     ripple('foo'), emitted = ''
 
     // state of the world
-    receive.call(socket, ['foo', false, { name: 'foo', body: {}, headers: { 'content-type': 'application/data' }}])
+    receiveChange.call(socket, ['foo', false, { name: 'foo', body: {}, headers: { 'content-type': 'application/data' }}])
     expect(change).to.be.eql(false)
     expect(res).to.be.eql({ name: 'foo', body: {}, headers: { 'content-type': 'application/data' }})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // new
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
     expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // replace
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
     expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // diff
-    receive.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
+    receiveChange.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
     expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // deep diff
-    receive.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
+    receiveChange.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
     expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
@@ -468,35 +469,35 @@ describe('Sync', function(){
     ripple.from = type
 
     // state of the world
-    receive.call(socket, ['foo', false, { name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }}])
+    receiveChange.call(socket, ['foo', false, { name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }}])
     expect(change).to.be.eql(false)
     expect(res).to.be.eql({ name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }})
     expect(ripple.resources.foo).to.be.eql(res)
     expect(emitted).to.be.not.ok
 
     // new
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'sth' }}]) 
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'sth' }}]) 
     expect(change).to.be.eql({ type: 'update', value: { foo: 'sth' }})
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'sth' })
     expect(emitted).to.be.not.ok
 
     // replace
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
     expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'baz' })
     expect(emitted).to.be.not.ok
 
     // diff
-    receive.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
+    receiveChange.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
     expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo' })
     expect(emitted).to.be.not.ok
 
     // deep diff
-    receive.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
+    receiveChange.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
     expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo', bar: { foo: 'wat' } })
@@ -516,7 +517,7 @@ describe('Sync', function(){
     ripple.types['application/data'].from = type
 
     // state of the world
-    receive.call(socket, ['foo', false, { name: 'foo', body: {}, headers: { 'content-type': 'application/data' }}])
+    receiveChange.call(socket, ['foo', false, { name: 'foo', body: {}, headers: { 'content-type': 'application/data' }}])
     expect(change).to.be.eql(false)
     expect(res).to.be.eql({ name: 'foo', body: {}, headers: { 'content-type': 'application/data' }})
     expect(ripple.resources.foo).to.not.be.ok
@@ -524,28 +525,28 @@ describe('Sync', function(){
 
     ripple('foo'), emitted = ''
     // new
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
     expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // replace
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
     expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // diff
-    receive.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
+    receiveChange.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
     expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // deep diff
-    receive.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
+    receiveChange.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
     expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
@@ -565,35 +566,35 @@ describe('Sync', function(){
     ripple.types['application/data'].from = type
 
     // state of the world
-    receive.call(socket, ['foo', false, { name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }}])
+    receiveChange.call(socket, ['foo', false, { name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }}])
     expect(change).to.be.eql(false)
     expect(res).to.be.eql({ name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }})
     expect(ripple.resources.foo).to.be.eql(res)
     expect(emitted).to.be.not.ok
 
     // new
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'sth' }}]) 
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'sth' }}]) 
     expect(change).to.be.eql({ type: 'update', value: { foo: 'sth' }})
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'sth' })
     expect(emitted).to.be.not.ok
 
     // replace
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
     expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'baz' })
     expect(emitted).to.be.not.ok
 
     // diff
-    receive.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
+    receiveChange.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
     expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo' })
     expect(emitted).to.be.not.ok
 
     // deep diff
-    receive.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
+    receiveChange.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
     expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo', bar: { foo: 'wat' } })
@@ -614,35 +615,35 @@ describe('Sync', function(){
     emitted = ''
 
     // state of the world
-    receive.call(socket, ['foo', false, { name: 'foo', body: {}, headers: { 'content-type': 'application/data' }}])
+    receiveChange.call(socket, ['foo', false, { name: 'foo', body: {}, headers: { 'content-type': 'application/data' }}])
     expect(change).to.be.eql(false)
     expect(res).to.be.eql({ name: 'foo', body: {}, headers: { 'content-type': 'application/data' }})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // new
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
     expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // replace
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
     expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // diff
-    receive.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
+    receiveChange.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
     expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
     expect(emitted).to.be.not.ok
 
     // deep diff
-    receive.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
+    receiveChange.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
     expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql([])
@@ -663,35 +664,35 @@ describe('Sync', function(){
     emitted = ''
 
     // state of the world
-    receive.call(socket, ['foo', false, { name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }}])
+    receiveChange.call(socket, ['foo', false, { name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }}])
     expect(change).to.be.eql(false)
     expect(clone(res)).to.be.eql({ name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }})
     expect(clone(ripple.resources.foo)).to.be.eql(res)
     expect(emitted).to.be.not.ok
 
     // new
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'sth' }}]) 
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'sth' }}]) 
     expect(change).to.be.eql({ type: 'update', value: { foo: 'sth' }})
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'sth' })
     expect(emitted).to.be.not.ok
 
     // replace
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
     expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'baz' })
     expect(emitted).to.be.not.ok
 
     // diff
-    receive.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
+    receiveChange.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
     expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo' })
     expect(emitted).to.be.not.ok
 
     // deep diff
-    receive.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
+    receiveChange.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
     expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
     expect(res).to.be.eql({})
     expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo', bar: { foo: 'wat' } })
@@ -708,10 +709,50 @@ describe('Sync', function(){
     var ripple = sync(data(core()), { server: { foo: 'bar' }})
     sockets = [socket, other]
 
-    receive.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
+    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
     expect(ripple.resources.foo.body).to.eql({ foo: 'bar' })
     expect(other.emitted).to.be.eql(['change', ['foo', { time: 0, type: 'update', value: { foo: 'bar' }}]])
     expect(socket.emitted).to.be.not.ok
+  })
+   
+  it('should emit response event when respond invoked', function(){  
+    var ripple = sync(data(core()), { server: { foo: 'bar' }})
+    ripple('foo', [], { from: from })
+    
+    receiveChange.call(socket, ['foo', { time: 70, type: 'update', value: { foo: 'bar' }}]) 
+    expect(emitted).to.eql(['response', ['foo', 70, 'echo']])
+
+    function from(res, change, respond) {
+      respond('echo')
+    }
+  })
+
+  it('should ack if available instead of emitting response event', function(done){  
+    var ripple = sync(data(core()), { server: { foo: 'bar' }})
+    ripple('foo', [], { from: from })
+    emitted = ''
+
+    receiveChange.call(socket, ['foo', { time: 70, type: 'update', value: { foo: 'bar' }}], ack) 
+    expect(emitted).to.eql('')
+
+    function from(res, change, respond) {
+      respond('echo')
+    }
+
+    function ack(reply) {
+      expect(reply).to.be.equal('echo')
+      done()
+    }
+  })
+
+  it('should emit event on receiving response', function(done){  
+    var ripple = sync(data(core()), { server: { foo: 'bar' }})
+    ripple('foo').on('response._70', function(reply){
+      expect(reply).to.be.eql('echo')
+      done()
+    })
+
+    receiveResponse.call(socket, ['foo', 70, 'echo'])
   })
  
   it('should not attempt to send non-existent resource', function(){  
@@ -727,7 +768,7 @@ describe('Sync', function(){
     expect(socket.ip).to.be.eql(10)
     expect(other.ip).to.be.eql(10)
   })
-  
+
 })
 
 function sio(o){
@@ -737,7 +778,8 @@ function sio(o){
       sockets.map(function(s){ fn(s, noop) })
     }
   , on: function(type, fn){
-      if (type === 'change') receive = fn
+      if (type === 'change') receiveChange = fn
+      if (type === 'response') receiveResponse = fn
       if (type === 'connection' && includes('change')(str(fn))) fn({ on: noop })
       if (type === 'connection') connection = fn
   }

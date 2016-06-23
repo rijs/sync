@@ -63,7 +63,7 @@ var _is2 = _interopRequireDefault(_is);
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 // -------------------------------------------
-// API: Synchronises resources between server/client
+// Synchronises resources between server/client
 // -------------------------------------------
 function sync(ripple, server) {
   log('creating');
@@ -168,7 +168,7 @@ var to = function to(ripple, res, change) {
 
 // incoming transforms
 var consume = function consume(ripple) {
-  return function (_ref3) {
+  return function (_ref3, ack) {
 /* istanbul ignore next */
     var _ref4 = _slicedToArray(_ref3, 3);
 
@@ -186,7 +186,7 @@ var consume = function consume(ripple) {
         xres = (0, _header2.default)('from')(res),
         next = (0, _set2.default)(change),
         silent = silence(this),
-        respond = ripple.respond(this, name, change.time);
+        respond = ack || ripple.respond(this, name, change.time);
 
     return xall && !xall.call(this, req, change, respond) ? debug('skip all', name) // rejected - by xall
     : xtype && !xtype.call(this, req, change, respond) ? debug('skip type', name) // rejected - by xtype

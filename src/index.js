@@ -22,10 +22,10 @@ export default function sync(ripple, server){
 }
 
 const respond = ripple => (socket, name, time) => reply => {
-  socket.emit('response', [ name, time, reply ])
+  socket.emit('response', [name, time, reply])
 }
 
-const response = ripple => function([ name, time, reply ]) {
+const response = ripple => function([name, time, reply]) {
   ripple.resources[name].body.emit('response._' + time, reply)
 }
 
@@ -78,7 +78,7 @@ const to = (ripple, res, change) => socket => {
 }
 
 // incoming transforms
-const consume = ripple => function([name, change, req = {}]) {
+const consume = ripple => function([name, change, req = {}], ack) {
   log('receiving', name)
   
   const res     = ripple.resources[name]
@@ -87,7 +87,7 @@ const consume = ripple => function([name, change, req = {}]) {
       , xres    = header('from')(res)
       , next    = set(change)
       , silent  = silence(this)
-      , respond = ripple.respond(this, name, change.time)
+      , respond = ack || ripple.respond(this, name, change.time)
 
   return xall  &&  !xall.call(this, req, change, respond) ? debug('skip all' , name) // rejected - by xall
        : xtype && !xtype.call(this, req, change, respond) ? debug('skip type', name) // rejected - by xtype
