@@ -4,104 +4,129 @@
 export default function sync(ripple, server){
   log('creating')
   
-  if (!client && !server) return
+  if (!client && !server) return ripple
   if (!client) 
     ripple.to = clean(ripple.to)
   , values(ripple.types).map(type => type.parse = headers(ripple)(type.parse))
 
-  ripple.stream = stream(ripple)
-  ripple.respond = respond(ripple)
   ripple.io = io(server)
-  ripple.on('change.stream', ripple.stream())                      // both   - broadcast change to everyone
-  ripple.io.on('change', consume(ripple))                          // client - receive change
-  ripple.io.on('response', response(ripple))                       // client - receive response
-  ripple.io.on('connection', s => s.on('change', consume(ripple))) // server - receive change
-  ripple.io.on('connection', s => ripple.stream(s)())              // server - send all resources to new client
-  ripple.io.use(setIP)
+  ripple.io.use(ip)
+  ripple.req = send(ripple)(ripple)
+  ripple.send = client ? send(ripple)(ripple.io) : send(ripple)
+  ripple.on('change.send', broadcast(ripple))
+  ripple.io.on('change', consume(ripple))
+  ripple.io.on('connection', connected(ripple))
   return ripple
 }
 
-const respond = ripple => (socket, name, time) => reply => {
-  socket.emit('response', [name, time, reply])
+const connected = ripple => socket => {
+  log('connected'.green, str(socket.ip).grey) 
+  socket.on('change', consume(ripple))
+  ripple.send(socket)()
 }
 
-const response = ripple => function([name, time, reply]) {
-  ripple.resources[name].body.emit('response._' + time, reply)
+const broadcast = ripple => (name, change) => {
+  (client ? ripple.send : ripple.send())
+    (extend({ name })(change))
 }
 
-// send diff to all or some sockets
-const stream = ripple => sockets => (name, change) => {
-  if (!name) return values(ripple.resources)
-    .map(d => stream(ripple)(sockets)(d.name))
+const normalize = (ripple, next = identity) => (name, type, value) => {
+  let req = is.obj(name) ? name : { name, type, value }
+    , resource = ripple.resources[req.name]
 
-  const everyone = client ? [ripple.io] : values(ripple.io.of('/').sockets)
-      , log      = count(everyone.length, name)
-      , res      = ripple.resources[name]
-      , send     = to(ripple, res, change)
+  if (!req.name)
+    return next(values(ripple.resources).map(normalize(ripple)))
 
-  return !res            ? (log('no resource', name))
-       : is.str(sockets) ? (log(everyone.filter(by('sessionID', sockets)).map(send)), ripple)
-       : !sockets        ? (log(everyone.map(send)), ripple)
-                         : (log(send(sockets)), ripple)
+  if (!resource) 
+    return Promise.resolve([404, err(`cannot find ${req.name}`)])
+  
+  if (!req.type)
+    req = {
+      name   : req.name
+    , type   : 'update'
+    , headers: resource.headers
+    , value  : resource.body
+    , time   : now(resource)
+    }
+
+  if (req.type == 'update' && !req.key)
+    req.headers = resource.headers
+
+  return next(req)
 }
+
+// send all or some req, to all or some sockets
+const send = (ripple, l = log) => who => normalize(ripple, req => {
+  const count    = sent => `${str(sent.length).green.bold}/${str(everyone.length).green}`
+      , all      = d => req.length && log('send'.grey, count(sockets), 'all'.bold, `(${req.length})`.grey)
+      , everyone = client ? [ripple.io] : values(ripple.io.of('/').sockets)
+      , sockets  = is.arr(who) ? who
+                 : is.str(who) ? everyone.filter(by('sessionID', who))
+                 : !who        ? everyone
+                               : [who]
+      , promises = is.arr(req) ? (all(), req.map(send(ripple, l = noop)(sockets)))
+                 : sockets.map(s => to(ripple, req, s)).filter(Boolean)
+
+  if (promises.length) l('send'.grey, count(promises), req.name)
+  return Promise.all(promises)
+})
 
 // outgoing transforms
-const to = (ripple, res, change) => socket => {
-  if (header('silent', socket)(res)) return delete res.headers.silent, false
-  
-  var xres  = header('to')(res)
-    , xtype = type(ripple)(res).to
-    , xall  = ripple.to
-    , body, rep, out
+const to = (ripple, req, socket, resource) => {
+  if (header('silent', socket)(resource = ripple.resources[req.name]))
+    return delete resource.headers.silent, false
 
-  body = res.body
-  if (xres) {
-    if (!(out = xres.call(socket, res, change))) return false
-    if (out !== true) { change = false, body = out }
+  const nametype = `(${req.name}, ${req.type})`
+      , xres = header('to')(resource)    || identity
+      , xtyp = type(ripple)(resource).to || identity
+      , xall = ripple.to                 || identity
+      , p    = promise()
+
+  req = extend({ socket })(req)
+  if (!(req = xres(req))) return false
+  if (!(req = xtyp(req))) return false
+  if (!(req = xall(req))) return false
+  delete req.socket
+
+  socket == ripple 
+    ? consume(ripple)(req, res)
+    : socket.emit('change', req, res)
+
+  return p
+
+  function res() { 
+    deb('ack'.grey, nametype, str(socket.ip).grey)
+    p.resolve.call(ripple, arr(arguments))
   }
-
-  rep = { name: res.name, body, headers: res.headers }
-  if (xtype) {
-    if (!(out = xtype.call(socket, rep, change))) return false
-    if (out !== true) change = false, rep = out
-  }
-
-  if (xall) {
-    if (!(out = xall.call(socket, rep, change))) return false
-    if (out !== true) change = false, rep = out
-  }
-
-  return socket.emit('change', change
-    ? [res.name, change] 
-    : [res.name, false, rep])
-    , true
 }
 
 // incoming transforms
-const consume = ripple => function([name, change, req = {}], ack) {
-  log('receiving', name)
-  
-  const res     = ripple.resources[name]
-      , xall    = ripple.from
-      , xtype   = type(ripple)(res).from || type(ripple)(req).from // is latter needed?
-      , xres    = header('from')(res)
-      , next    = set(change)
-      , silent  = silence(this)
-      , respond = ack || ripple.respond(this, name, change.time)
+const consume = ripple => function(req, res = noop) {
+  const nametype = `(${req.name}, ${req.type})`
+      , resource = ripple.resources[req.name]
+      , silent   = silence(req.socket = this)
+      , xres     = header('from')(resource)    || identity
+      , xtyp     = type(ripple)(resource).from || identity
+      , xall     = ripple.from                 || identity
 
-  return xall  &&  !xall.call(this, req, change, respond) ? debug('skip all' , name) // rejected - by xall
-       : xtype && !xtype.call(this, req, change, respond) ? debug('skip type', name) // rejected - by xtype
-       : xres  &&  !xres.call(this, req, change, respond) ? debug('skip res' , name) // rejected - by xres
-       : !change     ? ripple(silent(req))                                  // accept - replace (new)
-       : !change.key ? ripple(silent({ name, body: change.value }))         // accept - replace at root
-                     : (silent(res), next(res.body))                        // accept - deep change
+  log('recv'.grey, nametype)
+  try { 
+    ( !req.name                        ? res(404, err('not found'.red, req.name))
+    : !(req = xall(req, res))          ? deb('skip', 'global'  , nametype)
+    : !(req = xtyp(req, res))          ? deb('skip', 'type'    , nametype)
+    : !(req = xres(req, res))          ? deb('skip', 'resource', nametype)
+    : !req.key && req.type == 'update' ? (ripple(silent(body(req)))
+                                       , res(200, deb(`ok ${nametype}`)))
+    :  isStandardVerb(req.type)        ? (set(req)(silent(resource).body)
+                                       , res(200, deb(`ok ${nametype}`, key.grey)))
+    : !isStandardVerb(req.type)        ? res(405, err('method not allowed', nametype))
+                                       : res(400, err('cannot process', nametype)))
+  } catch (e) {
+    res(e.status || 500, err(e.message, nametype, '\n', e.stack))
+  }
 }
 
-const count = (total, name) => tally => debug(
-  str((is.arr(tally) ? tally : [1]).filter(Boolean).length).green.bold + '/' 
-+ str(total).green
-, 'sending', name
-)
+const body = ({ name, body, value, headers }) => ({ name, headers, body: value })
 
 const headers = ripple => next => res => {
   const existing = ripple.resources[res.name]
@@ -121,26 +146,30 @@ const io = opts => {
   return r
 }
 
-const setIP = (socket, next) => {
+const ip = (socket, next) => {
   socket.ip = socket.request.headers['x-forwarded-for'] 
            || socket.request.connection.remoteAddress
   next()
 }
 
-const clean = next => function({ name, body, headers }, change){
-  if (change) return next ? next.apply(this, arguments) : true
-
+const clean = next => (req, res) => {
+  if (!req.headers || !req.headers.silent) 
+    return (next || identity)(req, res)
+  
   const stripped = {}
 
-  keys(headers)
+  keys(req.headers)
     .filter(not(is('silent')))
-    .map(header => stripped[header] = headers[header])
+    .map(header => stripped[header] = req.headers[header])
 
-  return (next || identity).apply(this, [{ name, body, headers: stripped }, change])
+  req.headers = stripped
+  return (next || identity)(req, res)
 }
 
 import identity from 'utilise/identity'
+import promise from 'utilise/promise'
 import values from 'utilise/values'
+import extend from 'utilise/extend'
 import header from 'utilise/header'
 import client from 'utilise/client'
 import noop from 'utilise/noop'
@@ -151,8 +180,12 @@ import set from 'utilise/set'
 import key from 'utilise/key'
 import by from 'utilise/by'
 import is from 'utilise/is'
+import { arr } from 'utilise/to'
+
 const type = ripple => res => ripple.types[header('content-type')(res)] || {}
+    , now = (d, t) => (t = key('body.log.length')(d), is.num(t) ? t - 1 : t)
     , silence = socket => res => key('headers.silent', socket)(res)
+    , isStandardVerb = is.in(['update', 'add', 'remove'])
     , log = require('utilise/log')('[ri/sync]')
     , err = require('utilise/err')('[ri/sync]')
-    , debug = noop
+    , deb = (!client && process.env.DEBUG || '').split(',').some(is('[ri/sync]')) ? log : identity

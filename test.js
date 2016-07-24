@@ -1,22 +1,27 @@
 var core     = require('rijs.core').default
   , data     = require('rijs.data').default
   , sync     = require('./').default
+  , hashcode = require('utilise/hashcode')
   , includes = require('utilise/includes')
   , update   = require('utilise/update')
   , remove   = require('utilise/remove')
   , clone    = require('utilise/clone')
+  , falsy    = require('utilise/falsy')
   , push     = require('utilise/push')
   , noop     = require('utilise/noop')
+  , keys     = require('utilise/keys')
+  , time     = require('utilise/time')
+  , not      = require('utilise/not')
   , key      = require('utilise/key')
   , pop      = require('utilise/pop')
   , str      = require('utilise/str')
+  , log      = require('utilise/log')('')
   , is       = require('utilise/is')
-  , to       = require('utilise/to')
+  , arr      = require('utilise/to').arr
   , expect   = require('chai').expect
   , mockery  = require('mockery')
-  , socket   = { emit: function(){ return socket.emitted = emitted = to.arr(arguments)}, request: { headers: { 'x-forwarded-for': 10 }}}
-  , other    = { emit: function(){ return other.emitted = to.arr(arguments)}, request: { headers: {}, connection: { 'remoteAddress': 10 }} }
-  , sockets, opts, emitted, connection, receiveChange, receiveResponse
+  , request  = { headers: { 'x-forwarded-for': '?' } }
+  , socket, other, sockets, opts, connection
 
 describe('Sync', function(){
 
@@ -26,8 +31,9 @@ describe('Sync', function(){
   })
 
   beforeEach(function(){
-    opts = emitted = socket.emitted = other.emitted = null
-    sockets = [socket]
+    socket = emit({ on: noop, request: { headers: { 'x-forwarded-for': 10 }}})
+    other  = emit({ on: noop, request: { headers: {}, connection: { 'remoteAddress': 20 }} })
+    opts   = null
   })
 
   after(function(){ 
@@ -35,754 +41,590 @@ describe('Sync', function(){
   })
 
   it('should initialise correctly', function(){  
-    expect(sync(data(core()))).to.be.not.ok
+    // no opts, no server
+    expect(sync({})).to.be.eql({})
+    expect(sync({}).io).to.be.not.ok
 
+    // opts
     expect(sync(data(core()), { foo: 'bar' })).to.be.ok
     expect(opts).to.be.eql({ foo: 'bar' })
 
-    expect(sync(data(core()), { server: { foo: 'bar' }})).to.be.ok
+    // opts + server
+    const ripple = sync(data(core()), { server: { foo: 'bar' }})
     expect(opts).to.be.eql({ foo: 'bar' })
-  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
     expect(ripple.io).to.be.ok
-    expect(ripple.stream).to.be.a('function')
+    expect(ripple.send).to.be.a('function')
   })
 
-  it('should stream new resource', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-    ripple('foo', { foo: 'bar' }) 
-    expect(emitted).to.eql(['change', ['foo', { time: 0, type: 'update', value: { foo: 'bar' }}]])
+  it('should send change', function(){  
+    to(null, null, null, [
+      { name: 'foo', time: 0, type: 'update', value: { bar: 'baz' }, headers: { 'content-type': 'application/data' } }
+    , { name: 'foo', time: 1, type: 'update', value: { baz: 'four' }, headers: { 'content-type': 'application/data' } }
+    , { name: 'foo', time: 2, type: 'update', key: 'bar.foo', value: 'seven' }
+    ])
   })
 
-  it('should stream change', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-    
-    // new
-    ripple('foo', { foo: 'bar' }) 
-    expect(emitted).to.eql(['change', ['foo', { time: 0, type: 'update', value: { foo: 'bar' }}]])
-    expect(ripple.resources.foo.body).to.eql({ foo: 'bar' })
-
-    // replace    
-    ripple('foo', { foo: 'baz' }) 
-    expect(emitted).to.eql(['change', ['foo', { time: 1, type: 'update', value: { foo: 'baz' }}]])
-    expect(ripple.resources.foo.body).to.eql({ foo: 'baz' })
-
-    // diff
-    update('foo', 'boo')(ripple('foo'))
-    expect(emitted).to.eql(['change', ['foo', { time: 2, type: 'update', key: 'foo', value: 'boo' }]])
-    expect(ripple.resources.foo.body).to.eql({ foo: 'boo' })
-
-    // deep diff
-    update('bar.foo', 'wat')(ripple('foo'))
-    expect(emitted).to.eql(['change', ['foo', { time: 3, type: 'update', key: 'bar.foo', value: 'wat' }]])
-    expect(ripple.resources.foo.body).to.eql({ foo: 'boo', bar: { foo: 'wat' } })
+  it('should send change - resource', function(){  
+    to(hash, null, null, [
+      { name: 'foo', time: 0, type: 'update', value: { hash: 1007607064 }, headers: { 'content-type': 'application/data' } }
+    , { name: 'foo', time: 1, type: 'update', value: { hash: -273689001 }, headers: { 'content-type': 'application/data' } }
+    , { name: 'foo', time: 2, type: 'update', key: 'bar.foo', value: { hash: 109330445  } }
+    ])
   })
 
-  it('should transform outgoing - block', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      , change, res
-
-    // new
-    ripple('foo', { foo: 'bar' }, { to: block }) 
-    expect(emitted).to.be.not.ok
-    expect(change).to.be.eql({ time: 0, type: 'update', value: { foo: 'bar' }})
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    // replace
-    ripple('foo', { foo: 'baz' })
-    expect(emitted).to.be.not.ok
-    expect(change).to.be.eql({ time: 1, type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql(ripple.resources.foo)
-  
-    // diff
-    update('foo', 'boo')(ripple('foo'))
-    expect(emitted).to.be.not.ok
-    expect(change).to.be.eql({ time: 2, type: 'update', key: 'foo', value: 'boo' })
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    // deep diff
-    update('bar.foo', 'wat')(ripple('foo'))
-    expect(emitted).to.be.not.ok
-    expect(change).to.be.eql({ time: 3, type: 'update', key: 'bar.foo', value: 'wat' })
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    function block(r, c) {
-      return change = c
-           , res = r
-           , false
-    }
+  it('should send change - type', function(){  
+    to(null, hash, null, [
+      { name: 'foo', time: 0, type: 'update', value: { hash: 1007607064 }, headers: { 'content-type': 'application/data' } }
+    , { name: 'foo', time: 1, type: 'update', value: { hash: -273689001 }, headers: { 'content-type': 'application/data' } }
+    , { name: 'foo', time: 2, type: 'update', key: 'bar.foo', value: { hash: 109330445  } }
+    ])
   })
 
-  it('should transform outgoing - pass through', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      , change, res
-
-    // new
-    ripple('foo', { foo: 'bar' }, { to: pass }) 
-    expect(emitted).to.eql(['change', ['foo', { time: 0, type: 'update', value: { foo: 'bar' }}]])
-    expect(change).to.be.eql({ time: 0, type: 'update', value: { foo: 'bar' }})
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    // replace
-    ripple('foo', { foo: 'baz' })
-    expect(emitted).to.eql(['change', ['foo', { time: 1, type: 'update', value: { foo: 'baz' }}]])
-    expect(change).to.be.eql({ time: 1, type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql(ripple.resources.foo)
-  
-    // diff
-    update('foo', 'boo')(ripple('foo'))
-    expect(emitted).to.eql(['change', ['foo', { time: 2, type: 'update', key: 'foo', value: 'boo' }]])
-    expect(change).to.be.eql({ time: 2, type: 'update', key: 'foo', value: 'boo' })
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    // deep diff
-    update('bar.foo', 'wat')(ripple('foo'))
-    expect(emitted).to.eql(['change', ['foo', { time: 3, type: 'update', key: 'bar.foo', value: 'wat' }]])
-    expect(change).to.be.eql({ time: 3, type: 'update', key: 'bar.foo', value: 'wat' })
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    function pass(r, c) {
-      return change = c
-           , res = r
-           , true
-    }
+  it('should send change - global', function(){  
+    to(null, null, hash, [
+      { name: 'foo', time: 0, type: 'update', value: { hash: 1007607064 }, headers: { 'content-type': 'application/data' } }
+    , { name: 'foo', time: 1, type: 'update', value: { hash: -273689001 }, headers: { 'content-type': 'application/data' } }
+    , { name: 'foo', time: 2, type: 'update', key: 'bar.foo', value: { hash: 109330445  } }
+    ])
   })
 
-  it('should transform outgoing - arbitrary representation', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      , change, res
-
-    // new
-    ripple('foo', { foo: 'bar' }, { to: transform }) 
-    expect(res).to.be.eql(ripple.resources.foo)
-    expect(change).to.be.eql({ time: 0, type: 'update', value: { foo: 'bar' }})
-    expect(clone(emitted)).to.be.eql(['change', ['foo', false, {
-      body: 3
-    , headers: { 'content-type': 'application/data' }
-    , name: 'foo'
-    }]])
-
-    // replace
-    ripple('foo', { foo: 'bazoo' })
-    expect(res).to.be.eql(ripple.resources.foo)
-    expect(change).to.be.eql({ time: 1, type: 'update', value: { foo: 'bazoo' }})
-    expect(clone(emitted)).to.be.eql(['change', ['foo', false, {
-      body: 5
-    , headers: { 'content-type': 'application/data' }
-    , name: 'foo'
-    }]])
-
-    // diff
-    update('foo', 'booo')(ripple('foo'))
-    expect(res).to.be.eql(ripple.resources.foo)
-    expect(change).to.be.eql({ time: 2, type: 'update', key: 'foo', value: 'booo' })
-    expect(clone(emitted)).to.be.eql(['change', ['foo', false, {
-      body: 4
-    , headers: { 'content-type': 'application/data' }
-    , name: 'foo'
-    }]])
-
-    // deep diff
-    update('bar.foo', 'w')(ripple('foo'))
-    expect(res).to.be.eql(ripple.resources.foo)
-    expect(change).to.be.eql({ time: 3, type: 'update', key: 'bar.foo', value: 'w' })
-    expect(clone(emitted)).to.be.eql(['change', ['foo', false, {
-      body: 1
-    , headers: { 'content-type': 'application/data' }
-    , name: 'foo'
-    }]])
-  
-    function transform(r, c) {
-      return change = c
-           , res = r
-           , r.body.bar ? r.body.bar.foo.length : r.body.foo.length
-    }
+  it('should send change - block - resource', function(){  
+    to(falsy, null, null, [
+      false
+    , false
+    , false
+    ])
   })
 
-  it('should transform outgoing - for all resources of a type', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      , change, res
-
-    // new
-    ripple.types['application/data'].to = type
-    ripple('foo', { foo: 'bar' }) 
-    expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ time: 0, type: 'update', value: { foo: 'bar' }})
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    // replace
-    ripple('foo', { foo: 'baz' })
-    expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ time: 1, type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql(ripple.resources.foo)
-  
-    // diff
-    update('foo', 'boo')(ripple('foo'))
-    expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ time: 2, type: 'update', key: 'foo', value: 'boo' })
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    // deep diff
-    update('bar.foo', 'wat')(ripple('foo'))
-    expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ time: 3, type: 'update', key: 'bar.foo', value: 'wat' })
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    function type(r, c) {
-      return change = c
-           , res = r
-           , false
-    }
+  it('should send change - block - type', function(){  
+    to(null, falsy, null, [
+      false
+    , false
+    , false
+    ])
   })
 
-  it('should transform outgoing - for all resources of a type - pass through', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      , change, res
-
-    // new
-    ripple.types['application/data'].to = type
-    ripple('foo', { foo: 'bar' }) 
-    expect(emitted).to.eql(['change', ['foo', { time: 0, type: 'update', value: { foo: 'bar' }}]])
-    expect(change).to.be.eql({ time: 0, type: 'update', value: { foo: 'bar' }})
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    // replace
-    ripple('foo', { foo: 'baz' })
-    expect(emitted).to.eql(['change', ['foo', { time: 1, type: 'update', value: { foo: 'baz' }}]])
-    expect(change).to.be.eql({ time: 1, type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql(ripple.resources.foo)
-  
-    // diff
-    update('foo', 'boo')(ripple('foo'))
-    expect(emitted).to.eql(['change', ['foo', { time: 2, type: 'update', key: 'foo', value: 'boo' }]])
-    expect(change).to.be.eql({ time: 2, type: 'update', key: 'foo', value: 'boo' })
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    // deep diff
-    update('bar.foo', 'wat')(ripple('foo'))    
-    expect(emitted).to.eql(['change', ['foo', { time: 3, type: 'update', key: 'bar.foo', value: 'wat' }]])
-    expect(change).to.be.eql({ time: 3, type: 'update', key: 'bar.foo', value: 'wat' })
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    function type(r, c) {
-      return change = c
-           , res = r
-           , true
-    }
-  })
-
-  it('should transform outgoing - for all resources of a type', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      , change, res
-
-    // new
-    ripple.to = type
-    ripple('foo', { foo: 'bar' }) 
-    expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ time: 0, type: 'update', value: { foo: 'bar' }})
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    // replace
-    ripple('foo', { foo: 'baz' })
-    expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ time: 1, type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql(ripple.resources.foo)
-  
-    // diff
-    update('foo', 'boo')(ripple('foo'))
-    expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ time: 2, type: 'update', key: 'foo', value: 'boo' })
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    // deep diff
-    update('bar.foo', 'wat')(ripple('foo'))
-    expect(emitted).to.not.be.ok
-    expect(change).to.be.eql({ time: 3, type: 'update', key: 'bar.foo', value: 'wat' })
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    function type(r, c) {
-      return change = c
-           , res = r
-           , false
-    }
-  })
-
-  it('should transform outgoing - for all resources of a type - pass through', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      , change, res
-
-    // new
-    ripple.to = type
-    ripple('foo', { foo: 'bar' }) 
-    expect(emitted).to.eql(['change', ['foo', { time: 0, type: 'update', value: { foo: 'bar' }}]])
-    expect(change).to.be.eql({ time: 0, type: 'update', value: { foo: 'bar' }})
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    // replace
-    ripple('foo', { foo: 'baz' })
-    expect(emitted).to.eql(['change', ['foo', { time: 1, type: 'update', value: { foo: 'baz' }}]])
-    expect(change).to.be.eql({ time: 1, type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql(ripple.resources.foo)
-  
-    // diff
-    update('foo', 'boo')(ripple('foo'))
-    expect(emitted).to.eql(['change', ['foo', { time: 2, type: 'update', key: 'foo', value: 'boo' }]])
-    expect(change).to.be.eql({ time: 2, type: 'update', key: 'foo', value: 'boo' })
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    // deep diff
-    update('bar.foo', 'wat')(ripple('foo'))    
-    expect(emitted).to.eql(['change', ['foo', { time: 3, type: 'update', key: 'bar.foo', value: 'wat' }]])
-    expect(change).to.be.eql({ time: 3, type: 'update', key: 'bar.foo', value: 'wat' })
-    expect(res).to.be.eql(ripple.resources.foo)
-
-    function type(r, c) {
-      return change = c
-           , res = r
-           , true
-    }
+  it('should send change - block - global', function(){  
+    to(null, null, falsy, [
+      false
+    , false
+    , false
+    ])
   })
 
   it('should broacast all resources on connection', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      , emitted = []
+    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+        , capture = []
+        , time = 0
+        , type = 'update'
+        , expected = [
+            { name: 'foo', type, time, headers: {'content-type': 'application/data'}, value: { foo: 'bar' }}
+          , { name: 'bar', type, time, headers: {'content-type': 'application/data'}, value: { bar: 'foo' }}
+          , { name: 'baz', type, time, headers: {'content-type': 'application/data'}, value: { baz: 'boo' }}
+          ]
 
     ripple('foo', { foo: 'bar' }) 
     ripple('bar', { bar: 'foo' }) 
     ripple('baz', { baz: 'boo' }) 
-    connection({ emit: function(){ emitted.push(clone(arguments)) }})
+    ripple.io.connect({ on: noop, emit: function(){ capture.push(arr(arguments)) }, request })
     
-    expect(emitted).to.eql([ 
-      { 0: 'change', 1: [ 'foo', false, { name: 'foo', headers: {'content-type': 'application/data'}, body: { foo: 'bar' }} ] }
-    , { 0: 'change', 1: [ 'bar', false, { name: 'bar', headers: {'content-type': 'application/data'}, body: { bar: 'foo' }} ] }
-    , { 0: 'change', 1: [ 'baz', false, { name: 'baz', headers: {'content-type': 'application/data'}, body: { baz: 'boo' }} ] }
-    ])
+    capture.map((d, i) => emitted(expected[i], d))
   })
 
-  it('should broacast to specific sockets', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      
+  it('should broacast to specific sockets', function(){
+    const ripple = sync(data(core()), { server: { foo: 'bar' }})      
+        , { send } = ripple
+        , time = 0
+        , type = 'update'
+
     ripple('foo', { foo: 'bar' }) 
+    ripple.io.connect(socket)
+
+    socket.emitted = ''
     
-    emitted = ''
-    ripple.stream('sid')()
-    expect(emitted).to.not.be.ok
+    send('sid')()
+    emitted(false)
 
-    emitted = ''
+    socket.emitted = ''
     socket.sessionID = 'sid'
-    ripple.stream('sid')()
-    expect(emitted).to.be.eql(['change', ['foo', false, { name: 'foo', headers: {'content-type': 'application/data'}, body: { foo: 'bar' }}]])
+    send('sid')()
+    emitted({ name: 'foo', value: { foo: 'bar' }, time, type, headers: {'content-type': 'application/data' }})
 
-    emitted = ''
-    ripple.stream(socket)()
-    expect(emitted).to.be.eql(['change', ['foo', false, { name: 'foo', headers: {'content-type': 'application/data'}, body: { foo: 'bar' }}]])
+    socket.emitted = ''
+    send(socket)()
+    emitted({ name: 'foo', value: { foo: 'bar' }, time, type, headers: {'content-type': 'application/data' }})
   })
 
   it('should consume change', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-    
-    // new
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
-    expect(ripple.resources.foo).to.eql({ 
-      name: 'foo'
-    , body: { foo: 'bar' }
-    , headers: { 'content-type': 'application/data' }
-    })
-    expect(emitted).to.be.not.ok
-
-    // replace
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
-    expect(ripple.resources.foo.body).to.eql({ foo: 'baz' })
-    expect(emitted).to.be.not.ok
-
-    // diff
-    receiveChange.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
-    expect(ripple.resources.foo.body).to.eql({ foo: 'boo' })
-    expect(emitted).to.be.not.ok
-
-    // deep diff
-    receiveChange.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
-    expect(ripple.resources.foo.body).to.eql({ foo: 'boo', bar: { foo: 'wat' } })
-    expect(emitted).to.be.not.ok
+    from(null, null, null, [
+      { bar: 'baz' }
+    , { baz: 'four' }
+    , { baz: 'four', bar: { foo: 'seven' } }
+    ])
   })
 
-  it('should consume change - transform for all - block', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      , change, res
+  it('should consume change - block - resource', function(){  
+    from(falsy, null, null, [{}, {}, {}])
+  })
 
-    ripple.from = type
+  it('should consume change - block - type', function(){  
+    from(null, falsy, null, [{}, {}, {}])
+  })
 
-    // ignore
-    receiveChange.call(socket, ['foo', false, { name: 'foo', body: {}, headers: { 'content-type': 'application/data' }}])
-    expect(change).to.be.eql(false)
-    expect(res).to.be.eql({ name: 'foo', body: {}, headers: { 'content-type': 'application/data' }})
-    expect(ripple.resources.foo).to.be.not.ok
-    expect(emitted).to.be.not.ok
-    ripple('foo'), emitted = ''
-
-    // state of the world
-    receiveChange.call(socket, ['foo', false, { name: 'foo', body: {}, headers: { 'content-type': 'application/data' }}])
-    expect(change).to.be.eql(false)
-    expect(res).to.be.eql({ name: 'foo', body: {}, headers: { 'content-type': 'application/data' }})
-    expect(ripple.resources.foo.body).to.be.eql([])
-    expect(emitted).to.be.not.ok
-
-    // new
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql([])
-    expect(emitted).to.be.not.ok
-
-    // replace
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql([])
-    expect(emitted).to.be.not.ok
-
-    // diff
-    receiveChange.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
-    expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql([])
-    expect(emitted).to.be.not.ok
-
-    // deep diff
-    receiveChange.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
-    expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql([])
-    expect(emitted).to.be.not.ok
-
-    function type(r, c) {
-      return change = c
-           , res = r
-           , false
-    }
+  it('should consume change - block - global', function(){  
+    from(null, null, falsy, [{}, {}, {}])
   })
  
-  it('should consume change - transform for all - pass through', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      , change, res
-
-    ripple.from = type
-
-    // state of the world
-    receiveChange.call(socket, ['foo', false, { name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }}])
-    expect(change).to.be.eql(false)
-    expect(res).to.be.eql({ name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }})
-    expect(ripple.resources.foo).to.be.eql(res)
-    expect(emitted).to.be.not.ok
-
-    // new
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'sth' }}]) 
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'sth' }})
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql({ foo: 'sth' })
-    expect(emitted).to.be.not.ok
-
-    // replace
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql({ foo: 'baz' })
-    expect(emitted).to.be.not.ok
-
-    // diff
-    receiveChange.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
-    expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo' })
-    expect(emitted).to.be.not.ok
-
-    // deep diff
-    receiveChange.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
-    expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo', bar: { foo: 'wat' } })
-    expect(emitted).to.be.not.ok
-
-    function type(r, c) {
-      return change = is.obj(c) && clone(c)
-           , res = is.obj(r) && clone(r)
-           , true
-    }
+  it('should consume change - resource', function(){  
+    from(hash, null, null, [
+      { hash: 1007607064 }
+    , { hash: -273689001 }
+    , { hash: -273689001, bar: { foo: { hash: 109330445 } } }
+    ])
   })
 
-  it('should consume change - type transform - block', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      , change, res
-
-    ripple.types['application/data'].from = type
-
-    // state of the world
-    receiveChange.call(socket, ['foo', false, { name: 'foo', body: {}, headers: { 'content-type': 'application/data' }}])
-    expect(change).to.be.eql(false)
-    expect(res).to.be.eql({ name: 'foo', body: {}, headers: { 'content-type': 'application/data' }})
-    expect(ripple.resources.foo).to.not.be.ok
-    expect(emitted).to.be.not.ok
-
-    ripple('foo'), emitted = ''
-    // new
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql([])
-    expect(emitted).to.be.not.ok
-
-    // replace
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql([])
-    expect(emitted).to.be.not.ok
-
-    // diff
-    receiveChange.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
-    expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql([])
-    expect(emitted).to.be.not.ok
-
-    // deep diff
-    receiveChange.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
-    expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql([])
-    expect(emitted).to.be.not.ok
-
-    function type(r, c) {
-      return change = c
-           , res = r
-           , false
-    }
-  })
- 
-  it('should consume change - type transform - pass through', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      , change, res
-
-    ripple.types['application/data'].from = type
-
-    // state of the world
-    receiveChange.call(socket, ['foo', false, { name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }}])
-    expect(change).to.be.eql(false)
-    expect(res).to.be.eql({ name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }})
-    expect(ripple.resources.foo).to.be.eql(res)
-    expect(emitted).to.be.not.ok
-
-    // new
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'sth' }}]) 
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'sth' }})
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql({ foo: 'sth' })
-    expect(emitted).to.be.not.ok
-
-    // replace
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql({ foo: 'baz' })
-    expect(emitted).to.be.not.ok
-
-    // diff
-    receiveChange.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
-    expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo' })
-    expect(emitted).to.be.not.ok
-
-    // deep diff
-    receiveChange.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
-    expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo', bar: { foo: 'wat' } })
-    expect(emitted).to.be.not.ok
-
-    function type(r, c) {
-      return change = is.obj(c) && clone(c)
-           , res = is.obj(r) && clone(r)
-           , true
-    }
+  it('should consume change - type', function(){  
+    from(null, hash, null, [
+      { hash: 1007607064 }
+    , { hash: -273689001 }
+    , { hash: -273689001, bar: { foo: { hash: 109330445 } } }
+    ])
   })
 
-  it('should consume change - res transform - block', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      , change, res
-
-    ripple('foo', [], { from: block })
-    emitted = ''
-
-    // state of the world
-    receiveChange.call(socket, ['foo', false, { name: 'foo', body: {}, headers: { 'content-type': 'application/data' }}])
-    expect(change).to.be.eql(false)
-    expect(res).to.be.eql({ name: 'foo', body: {}, headers: { 'content-type': 'application/data' }})
-    expect(ripple.resources.foo.body).to.be.eql([])
-    expect(emitted).to.be.not.ok
-
-    // new
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'bar' }})
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql([])
-    expect(emitted).to.be.not.ok
-
-    // replace
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql([])
-    expect(emitted).to.be.not.ok
-
-    // diff
-    receiveChange.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
-    expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql([])
-    expect(emitted).to.be.not.ok
-
-    // deep diff
-    receiveChange.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
-    expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql([])
-    expect(emitted).to.be.not.ok
-
-    function block(r, c) {
-      return change = c
-           , res = r
-           , false
-    }
-  })
- 
-  it('should consume change - res transform - pass through', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-      , change, res
-
-    ripple('foo', [], { from: pass })
-    emitted = ''
-
-    // state of the world
-    receiveChange.call(socket, ['foo', false, { name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }}])
-    expect(change).to.be.eql(false)
-    expect(clone(res)).to.be.eql({ name: 'foo', body: { foo: 'bar' }, headers: { 'content-type': 'application/data' }})
-    expect(clone(ripple.resources.foo)).to.be.eql(res)
-    expect(emitted).to.be.not.ok
-
-    // new
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'sth' }}]) 
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'sth' }})
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql({ foo: 'sth' })
-    expect(emitted).to.be.not.ok
-
-    // replace
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'baz' }}])
-    expect(change).to.be.eql({ type: 'update', value: { foo: 'baz' }})
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql({ foo: 'baz' })
-    expect(emitted).to.be.not.ok
-
-    // diff
-    receiveChange.call(socket, ['foo', { key: 'foo', type: 'update', value: 'boo' }])
-    expect(change).to.be.eql({ key: 'foo', type: 'update', value: 'boo' })
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo' })
-    expect(emitted).to.be.not.ok
-
-    // deep diff
-    receiveChange.call(socket, ['foo', { key: 'bar.foo', type: 'update', value: 'wat' }])
-    expect(change).to.be.eql({ key: 'bar.foo', type: 'update', value: 'wat' })
-    expect(res).to.be.eql({})
-    expect(ripple.resources.foo.body).to.be.eql({ foo: 'boo', bar: { foo: 'wat' } })
-    expect(emitted).to.be.not.ok
-
-    function pass(r, c) {
-      return change = is.obj(c) && clone(c)
-           , res = is.obj(r) && clone(r)
-           , true
-    }
+  it('should consume change - global', function(){  
+    from(null, null, hash, [
+      { hash: 1007607064 }
+    , { hash: -273689001 }
+    , { hash: -273689001, bar: { foo: { hash: 109330445 } } }
+    ])
   })
 
   it('should ripple(!) changes', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-    sockets = [socket, other]
+    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+    ripple.io.connect(socket)
+    ripple.io.connect(other)
 
-    receiveChange.call(socket, ['foo', { type: 'update', value: { foo: 'bar' }}]) 
-    expect(ripple.resources.foo.body).to.eql({ foo: 'bar' })
-    expect(other.emitted).to.be.eql(['change', ['foo', { time: 0, type: 'update', value: { foo: 'bar' }}]])
-    expect(socket.emitted).to.be.not.ok
-  })
-   
-  it('should emit response event when respond invoked', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-    ripple('foo', [], { from: from })
-    
-    receiveChange.call(socket, ['foo', { time: 70, type: 'update', value: { foo: 'bar' }}]) 
-    expect(emitted).to.eql(['response', ['foo', 70, 'echo']])
-
-    function from(res, change, respond) {
-      respond('echo')
-    }
+    socket.receive({ name: 'foo', time: 0, type: 'update', value: { bar: 'baz' }})
+    expect(ripple.resources.foo.body).to.eql({ bar: 'baz' })
+    emitted({ name: 'foo', time: 0, type: 'update', value: { bar: 'baz' }, headers: { 'content-type': 'application/data'}}, other.emitted)
+    emitted(false)
   })
 
-  it('should ack if available instead of emitting response event', function(done){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-    ripple('foo', [], { from: from })
-    emitted = ''
+  it('should never send silent headers', function(){  
+    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+    ripple.io.connect(socket)
 
-    receiveChange.call(socket, ['foo', { time: 70, type: 'update', value: { foo: 'bar' }}], ack) 
-    expect(emitted).to.eql('')
-
-    function from(res, change, respond) {
-      respond('echo')
-    }
-
-    function ack(reply) {
-      expect(reply).to.be.equal('echo')
-      done()
-    }
+    socket.receive.call({}, { name: 'foo', type: 'update', value: { bar: 'baz' }})
+    emitted({ name: 'foo', time: 0, type: 'update', value: { bar: 'baz' }, headers: { 'content-type': 'application/data'}})
+  })
+  
+  it('should send/recv names with .', function(done){  
+    sendrecv(
+      done
+    , ['foo.bar']
+    , [[200, 'ok (foo.bar, update)']]
+    , null
+    , { name: 'foo.bar', body: 'baz' }
+    )
   })
 
-  it('should emit event on receiving response', function(done){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
-    ripple('foo').on('response._70', function(reply){
-      expect(reply).to.be.eql('echo')
-      done()
-    })
+  it('should respond with custom response', function(done){  
+    sendrecv(
+      noop
+    , [{ name: 'foo' }]
+    , [[999, 'ack']]
+    , (req, res) => res(999, 'ack')
+    )
 
-    receiveResponse.call(socket, ['foo', 70, 'echo'])
+    sendrecv(
+      done
+    , ['foo']
+    , [[999, 'ack']]
+    , (req, res) => res(999, 'ack')
+    )
   })
  
-  it('should not attempt to send non-existent resource', function(){  
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})   
-    expect(ripple.resources.foo).to.not.be.ok
-    ripple.stream()('foo')
-    expect(emitted).to.be.not.ok
+  it('should respond with 200 on standard mutation', function(done){
+    sendrecv(
+      noop
+    , [{ name: 'foo', type: 'add', value: 'bar' }]
+    , [[200, 'ok (foo, add)']]
+    )
+
+    sendrecv(
+      done
+    , ['foo', 'add', 'bar']
+    , [[200, 'ok (foo, add)']]
+    )
   })
- 
+
+  it('should respond with 200 on standard mutation (new)', function(done){
+    sendrecv(
+      noop
+    , [{ name: 'foo', type: 'update', value: { bar: 'baz' } }]
+    , [[200, 'ok (foo, update)']]
+    )
+
+    sendrecv(
+      done
+    , ['foo', 'update', { bar: 'baz' }]
+    , [[200, 'ok (foo, update)']]
+    )
+  })
+
+  it('should send all if no name', function(done){  
+    sendrecv(
+      noop
+    , [{}]
+    , [[[200, 'ok (foo, update)']]]
+    )
+
+    sendrecv(
+      done
+    , ['']
+    , [[[200, 'ok (foo, update)']]]
+    )
+  })
+
+  it('should not send if invalid name', function(done){  
+    sendrecv(
+      noop
+    , [{ name: 'invalid' }]
+    , [404, 'cannot find invalid']
+    )
+
+    sendrecv(
+      done
+    , ['invalid']
+    , [404, 'cannot find invalid']
+    )
+  })
+
+  it('should respond with 405 if type/verb not handled', function(done){  
+    sendrecv(
+      noop
+    , [{ name: 'foo', type: 'dance' }]
+    , [[405, 'method not allowed']]
+    )
+
+    sendrecv(
+      done
+    , ['foo', 'dance']
+    , [[405, 'method not allowed']]
+    )
+  })
+
+  it('should catch errors (default to 500)', function(done){  
+    sendrecv(
+      done
+    , ['foo']
+    , [[500, 'WTF!']]
+    , fail
+    )
+
+    function fail(req, res) {
+      throw new Error('WTF!')
+    }
+  })
+
+  it('should catch errors (default to 500)', function(done){  
+    sendrecv(
+      done
+    , ['foo']
+    , [[313, 'WTF!!']]
+    , fail
+    )
+
+    function fail(req, res) {
+      e = new Error('WTF!!')
+      e.status = 313
+      throw e
+     }
+  })
+
+  it('should allow emitting custom event and return promise - single socket', function(done){
+    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+        , { send } = ripple
+
+    ripple('foo', [])
+    socket.emitted = other.emitted = ''
+    send(socket)({ name: 'foo', type: 'update', value: ['bar'] }).then(replies => {
+      expect(replies).to.be.eql([['reply 1']])
+      emitted({ name: 'foo', type: 'update', value: ['bar'], headers: { 'content-type': 'application/data'}})
+      done()
+    }).catch(console.error)
+
+    socket.ack('reply 1')
+  })
+
+  it('should allow emitting custom event and return promise - multiple socket', function(done){
+    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+        , { send } = ripple
+
+    ripple('foo', [])
+    socket.emitted = other.emitted = ''
+    send([socket, other])({ name: 'foo', type: 'update', value: ['bar'] }).then(replies => {
+      expect(replies).to.be.eql([['reply 2'], ['reply 3']])
+      emitted({ name: 'foo', type: 'update', value: ['bar'], headers: { 'content-type': 'application/data'} })
+      emitted({ name: 'foo', type: 'update', value: ['bar'], headers: { 'content-type': 'application/data'} }, other.emitted)
+      done()
+    }).catch(console.error)
+
+    socket.ack('reply 2')
+    other.ack('reply 3')
+  })
+  
   it('should set ip', function(){  
-    sockets = [socket, other]
-    var ripple = sync(data(core()), { server: { foo: 'bar' }})
+    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+    ripple.io.connect(socket)
+    ripple.io.connect(other)
     expect(socket.ip).to.be.eql(10)
-    expect(other.ip).to.be.eql(10)
+    expect(other.ip).to.be.eql(20)
+  })
+
+  it('should be immutable req across sockets', function(){
+    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+        , { send } = ripple
+
+    ripple.io.connect(socket)
+    ripple.io.connect(other)
+    ripple('foo', { foo: 5 }, { to })
+    emitted(false)
+    emitted(false, other.emitted)
+
+    function to(req) {
+      expect(req.value).to.eql({ foo: 5 })
+      return false
+    }
+  })
+
+  it('should allow sending req to self', function(){
+    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+        , req = ripple.send(ripple)
+        , increment = ({ name }) => ({ name, type: 'update', value: { counter: ripple('store').counter + 1 }})
+        , decrement = ({ name }) => ({ name, type: 'update', value: { counter: ripple('store').counter - 1 }})
+    
+    ripple.io.connect(socket)
+
+    ripple('store', { counter: 5 }, { from })
+    expect(ripple('store')).to.eql({ counter: 5 })
+    socket.emitted = ''
+
+    req('store', 'INCREMENT')
+    req({ name: 'store', type: 'INCREMENT' })
+    emitted({ name: 'store', value: { counter: 7 }, time: 2, type: 'update', headers: {'content-type': 'application/data' }})
+
+    expect(ripple('store')).to.eql({ counter: 7 })
+    
+    req('store', 'DECREMENT')
+    req({ name: 'store', type: 'DECREMENT' })
+    emitted({ name: 'store', value: { counter: 5 }, time: 4, type: 'update', headers: {'content-type': 'application/data' }})
+
+    expect(ripple('store')).to.eql({ counter: 5 })
+    
+    function from(req, res) {
+      let counter = ripple('store').counter
+        , { type } = req
+
+      return type == 'INCREMENT' ? increment(req, res)
+           : type == 'DECREMENT' ? decrement(req, res)
+                                 : false
+    }
+  })
+
+
+  it('should allow sending req to self and respond', function(){
+    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+        , { req }= ripple
+    
+    ripple('store', { counter: 5 }, { from })
+    
+    req('store', 'VALID')
+      .then(replies => expect(replies).to.eql([[200, 'ok']]))
+    
+    req('store', 'INVALID')
+      .then(replies => expect(replies).to.eql([[500, 'not ok']]))
+    
+    function from(req, res) {
+      return req.type = 'VALID' 
+           ? res(200, 'ok')
+           : res(500, 'not ok')
+    }
   })
 
 })
 
 function sio(o){
   opts = o
+  let sockets = []
+    , use = []
+    , connect
+
   return {
-    use: function(fn){
-      sockets.map(function(s){ fn(s, noop) })
+    use: fn => use.push(fn)
+  , connect: s => {
+      s.on = (type, fn) => type == 'change' && (s.receive = fn)
+      sockets.push(s)
+      use.map(fn => fn(s, noop))
+      connect(s)
     }
   , on: function(type, fn){
-      if (type === 'change') receiveChange = fn
-      if (type === 'response') receiveResponse = fn
-      if (type === 'connection' && includes('change')(str(fn))) fn({ on: noop })
-      if (type === 'connection') connection = fn
+      if (type === 'connection') connect = fn 
   }
-  , of: function(){ return { sockets: sockets } }
+  , of: d => ({ sockets: sockets })
   }
+}
+
+function emitted(expected, obj) {
+  obj = obj || socket.emitted
+  if (!expected) return expect(obj).to.be.not.ok
+  const actual = obj[1]
+  expect(obj[0]).to.eql('change')
+  expect(obj[2]).to.be.a('function')
+  if (expected.headers) {
+    expect(actual.headers['content-type']).to.eql(expected.headers['content-type'])
+    expect(actual.headers.silent).to.eql(expected.headers.silent)
+  } else {
+    expect(actual.headers).to.be.not.ok
+  }
+
+  keys(actual)
+    .filter(not(is('socket')))
+    .filter(not(is('headers')))
+    .map(k => expect(actual[k]).to.be.eql(expected[k]))
+
+  keys(expected)
+    .filter(not(is('headers')))
+    .map(k => expect(actual[k]).to.be.eql(expected[k]))
+}
+
+function to(res, typ, all, expected) {
+  const ripple = sync(data(core()), { server: { foo: 'bar' }})
+      , headers = {}
+
+  ripple.io.connect(socket)
+  if (res) headers.to = transform(res)
+  if (typ) ripple.types['application/data'].to = transform(typ)
+  if (all) ripple.to = transform(all)
+
+  // new
+  ripple('foo', { bar: 'baz' }, headers) 
+  emitted(expected[0])
+
+  // replace
+  ripple('foo', { baz: 'four' })
+  emitted(expected[1])
+
+  // deep diff
+  update('bar.foo', 'seven')(ripple('foo'))
+  emitted(expected[2])
+
+  function transform(fn) {
+    return function(req) {
+      expect('name'   in req).to.be.ok
+      expect('type'   in req).to.be.ok
+      expect('time'   in req).to.be.ok
+      expect('value'  in req).to.be.ok
+      expect('socket' in req).to.be.ok
+      expect(arguments.length).to.be.eql(1)
+      return fn(req)
+    }
+  }
+}
+
+function from(res, typ, all, expected) {
+  const ripple = sync(data(core()), { server: { foo: 'bar' }})
+      , headers = {}
+
+  ripple.io.connect(socket)
+  if (res) headers.from = transform(res)
+  if (typ) ripple.types['application/data'].from = transform(typ)
+  if (all) ripple.from = transform(all)
+
+  ripple('foo', {}, headers) 
+  socket.emitted = ''
+
+  // new
+  socket.receive({ name: 'foo', time: 0, type: 'update', value: { bar: 'baz' }}, ack)
+  expect(ripple.resources.foo.name).to.eql('foo')
+  expect(ripple.resources.foo.body).to.eql(expected[0]) 
+  expect(ripple.resources.foo.headers['content-type']).to.eql('application/data')
+  emitted(false)
+
+  // replace
+  socket.receive({ name: 'foo', time: 1, type: 'update', value: { baz: 'four' }}, ack)
+  expect(ripple.resources.foo.name).to.eql('foo') 
+  expect(ripple.resources.foo.body).to.eql(expected[1]) 
+  expect(ripple.resources.foo.headers['content-type']).to.eql('application/data')
+  emitted(false)
+
+  // deep diff
+  socket.receive({ name: 'foo', time: 2, type: 'update', value: 'seven', key: 'bar.foo' }, ack)
+  expect(ripple.resources.foo.name).to.eql('foo') 
+  expect(ripple.resources.foo.body).to.eql(expected[2]) 
+  expect(ripple.resources.foo.headers['content-type']).to.eql('application/data')
+  emitted(false)
+
+  function transform(fn) {
+    return function(req, res) {
+      expect('name'   in req).to.be.ok
+      expect('type'   in req).to.be.ok
+      expect('time'   in req).to.be.ok
+      expect('value'  in req).to.be.ok
+      expect('socket' in req).to.be.ok
+      expect(res).to.be.a('function')
+      expect(arguments.length).to.be.eql(2)
+      return fn(req)
+    }
+  }
+
+  function ack(status, message) {
+    expect(status).to.be.eql(200)
+    expect(message).to.be.eql('ok (foo, update)')
+  }
+}
+
+function hash(req) {
+  req.value = { hash: hashcode(str(req.value)) }
+  return req
+}
+
+function sendrecv(done, args, expected, from, resources) { 
+  const server = sync(data(core()), { server: { foo: 'bar' }})
+      , client = sync(data(core()), { server: { foo: 'bar' }})
+ 
+  socket.emit = (type, req, res) =>  other.receive(clone(req), clone(res))
+  other.emit  = (type, req, res) => socket.receive(clone(req), clone(res))
+
+  server.io.connect(socket)
+  client.io.connect(other)
+
+  server('foo', [], (from ? { from } : {}))
+  server(resources)
+
+  expect(server.resources.foo).to.be.ok
+  expect(client.resources.foo).to.be.ok
+
+  client.send().apply({}, args)
+    .then(response)
+    // TODO: Consider rejecting on 4xx/5xx
+    // .catch(e => { 
+    //   console.error(e); 
+    //   expect(e).to.eql(error) 
+    //   done()
+    // })
+
+  function response(reply) {
+    expect(reply).to.be.eql(expected)
+    done()
+  }
+}
+
+function emit(socket){ 
+  socket.emit = function() {
+    socket.emitted = arr(arguments)
+    socket.ack = arguments[2]
+  }
+
+  return socket
 }
