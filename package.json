@@ -12,9 +12,9 @@
     "babel": "babel src -d dist",
     "clean": "rm -rf dist && mkdir dist",
     "build": "npm run clean && npm run babel && npm run ignore",
-    "test": "istanbul test ./node_modules/mocha/bin/_mocha --report html -- -R spec",
-    "coverage": "istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -R spec && rm -rf ./coverage",
-    "cov": "istanbul cover ./node_modules/mocha/bin/_mocha -- -R spec",
+    "test": "istanbul test ./node_modules/mocha/bin/_mocha --report html -- -R spec --colors",
+    "coverage": "istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -R spec --colors && rm -rf ./coverage",
+    "cov": "istanbul cover ./node_modules/mocha/bin/_mocha -- -R spec --colors",
     "test-popper": "popper",
     "version": "npm run build && git add -A",
     "postversion": "git push && git push --tags"
