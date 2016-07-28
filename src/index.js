@@ -82,21 +82,20 @@ const to = (ripple, req, socket, resource) => {
       , xall = ripple.to                 || identity
       , p    = promise()
 
-  req = extend({ socket })(req)
-  if (!(req = xres(req))) return false
-  if (!(req = xtyp(req))) return false
-  if (!(req = xall(req))) return false
-  delete req.socket
-
-  socket == ripple 
-    ? consume(ripple)(req, res)
-    : socket.emit('change', req, res)
+  Promise.resolve(xall(extend({ socket })(req)))
+    .then(req => req && xtyp(req))
+    .then(req => req && xres(req))
+    .then(req => 
+      !strip(req)      ? p.resolve([false])
+    : socket == ripple ? consume(ripple)(req, res)
+                       : socket.emit('change', req, res))
+    .catch(e => { throw new Error(err('to failed'.red, e)) })
 
   return p
 
   function res() { 
     deb('ack'.grey, nametype, str(socket.ip).grey)
-    p.resolve.call(ripple, arr(arguments))
+    p.resolve(arr(arguments))
   }
 }
 
@@ -152,7 +151,15 @@ const ip = (socket, next) => {
   next()
 }
 
+const strip = req => (delete req.socket, req)
+
 const clean = next => (req, res) => {
+  if (is.obj(req.value))
+    try { req.value = clone(req.value) } catch (e) { 
+      err('cannot send circular structure') 
+      return false
+    }
+
   if (!req.headers || !req.headers.silent) 
     return (next || identity)(req, res)
   
@@ -172,6 +179,7 @@ import values from 'utilise/values'
 import extend from 'utilise/extend'
 import header from 'utilise/header'
 import client from 'utilise/client'
+import clone from 'utilise/clone'
 import noop from 'utilise/noop'
 import keys from 'utilise/keys'
 import not from 'utilise/not'

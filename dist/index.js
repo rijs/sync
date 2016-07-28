@@ -30,6 +30,10 @@ var _client = require('utilise/client');
 /* istanbul ignore next */
 var _client2 = _interopRequireDefault(_client);
 
+var _clone = require('utilise/clone');
+
+var _clone2 = _interopRequireDefault(_clone);
+
 var _noop = require('utilise/noop');
 
 /* istanbul ignore next */
@@ -166,19 +170,21 @@ var to = function to(ripple, req, socket, resource) {
       xall = ripple.to || _identity2.default,
       p = (0, _promise2.default)();
 
-  req = (0, _extend2.default)({ socket: socket })(req);
-  if (!(req = xres(req))) return false;
-  if (!(req = xtyp(req))) return false;
-  if (!(req = xall(req))) return false;
-  delete req.socket;
-
-  socket == ripple ? consume(ripple)(req, res) : socket.emit('change', req, res);
+  Promise.resolve(xall((0, _extend2.default)({ socket: socket })(req))).then(function (req) {
+    return req && xtyp(req);
+  }).then(function (req) {
+    return req && xres(req);
+  }).then(function (req) {
+    return !strip(req) ? p.resolve([false]) : socket == ripple ? consume(ripple)(req, res) : socket.emit('change', req, res);
+  }).catch(function (e) {
+    throw new Error(err('to failed'.red, e));
+  });
 
   return p;
 
   function res() {
     deb('ack'.grey, nametype, (0, _str2.default)(socket.ip).grey);
-    p.resolve.call(ripple, (0, _to.arr)(arguments));
+    p.resolve((0, _to.arr)(arguments));
   }
 };
 
@@ -238,8 +244,19 @@ var ip = function ip(socket, next) {
   next();
 };
 
+var strip = function strip(req) {
+  return delete req.socket, req;
+};
+
 var clean = function clean(next) {
   return function (req, res) {
+    if (_is2.default.obj(req.value)) try {
+      req.value = (0, _clone2.default)(req.value);
+    } catch (e) {
+      err('cannot send circular structure');
+      return false;
+    }
+
     if (!req.headers || !req.headers.silent) return (next || _identity2.default)(req, res);
 
     var stripped = {};
