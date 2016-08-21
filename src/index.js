@@ -196,4 +196,4 @@ const type = ripple => res => ripple.types[header('content-type')(res)] || {}
     , isStandardVerb = is.in(['update', 'add', 'remove'])
     , log = require('utilise/log')('[ri/sync]')
     , err = require('utilise/err')('[ri/sync]')
-    , deb = (!client && process.env.DEBUG || '').split(',').some(is('[ri/sync]')) ? log : identity
+    , deb = require('utilise/deb')('[ri/sync]')

@@ -286,5 +286,4 @@ var type = function type(ripple) {
     isStandardVerb = _is2.default.in(['update', 'add', 'remove']),
     log = require('utilise/log')('[ri/sync]'),
     err = require('utilise/err')('[ri/sync]'),
-/* istanbul ignore next */
-    deb = (!_client2.default && process.env.DEBUG || '').split(',').some((0, _is2.default)('[ri/sync]')) ? log : _identity2.default;
+    deb = require('utilise/deb')('[ri/sync]');
