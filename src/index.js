@@ -27,7 +27,7 @@ const connected = ripple => socket => {
 
 const broadcast = ripple => (name, change) => {
   (client ? ripple.send : ripple.send())
-    (extend({ name })(change))
+    (extend({ name })(change || {}))
 }
 
 const normalize = (ripple, next = identity) => (name, type, value) => {
