@@ -107,7 +107,7 @@ var connected = function connected(ripple) {
 var broadcast = function broadcast(ripple) {
   return function (name, change) {
 /* istanbul ignore next */
-    (_client2.default ? ripple.send : ripple.send())((0, _extend2.default)({ name: name })(change));
+    (_client2.default ? ripple.send : ripple.send())((0, _extend2.default)({ name: name })(change || {}));
   };
 };
 
@@ -233,7 +233,7 @@ var headers = function headers(ripple) {
 
 var io = function io(opts) {
 /* istanbul ignore next */
-  var r = !_client2.default ? require('socket.io')(opts.server || opts) : window.io ? window.io() : _is2.default.fn(require('socket.io-client')) ? require('socket.io-client')() : { on: _noop2.default, emit: _noop2.default };
+  var r = !_client2.default ? require('socket.io')(opts.server || opts) : window.io ? window.io({ transports: ['websocket', 'polling'] }) : _is2.default.fn(require('socket.io-client')) ? require('socket.io-client')({ transports: ['websocket', 'polling'] }) : { on: _noop2.default, emit: _noop2.default };
 /* istanbul ignore next */
   r.use = r.use || _noop2.default;
   return r;
