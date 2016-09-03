@@ -138,8 +138,8 @@ const headers = ripple => next => res => {
 
 const io = opts => {
   const r = !client ? require('socket.io')(opts.server || opts)
-          : window.io ? window.io()
-          : is.fn(require('socket.io-client')) ? require('socket.io-client')()
+          : window.io ? window.io({ transports: ['websocket', 'polling'] })
+          : is.fn(require('socket.io-client')) ? require('socket.io-client')({ transports: ['websocket', 'polling'] })
           : { on: noop, emit: noop }
   r.use = r.use || noop
   return r
