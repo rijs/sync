@@ -333,21 +333,21 @@ describe('Sync', function(){
     )
   })
 
-  it('should not send if invalid name', function(done){  
-    sendrecv(
-      done
-    , [{ name: 'invalid' }]
-    , [404, 'cannot find invalid']
-    )
-  })
+  // it('should not send if invalid name', function(done){  
+  //   sendrecv(
+  //     done
+  //   , [{ name: 'invalid' }]
+  //   , [404, 'cannot find invalid']
+  //   )
+  // })
 
-  it('should not send if invalid name (shorthand)', function(done){  
-    sendrecv(
-      done
-    , ['invalid']
-    , [404, 'cannot find invalid']
-    )
-  })
+  // it('should not send if invalid name (shorthand)', function(done){  
+  //   sendrecv(
+  //     done
+  //   , ['invalid']
+  //   , [404, 'cannot find invalid']
+  //   )
+  // })
 
   it('should respond with 405 if type/verb not handled', function(done){  
     sendrecv(

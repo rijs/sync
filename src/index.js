@@ -37,8 +37,8 @@ const normalize = (ripple, next = identity) => (name, type, value) => {
   if (!req.name)
     return next(values(ripple.resources).map(normalize(ripple)))
 
-  if (!resource) 
-    return Promise.resolve([404, err(`cannot find ${req.name}`)])
+  // if (!resource)
+  //   return Promise.resolve([404, err(`cannot find ${req.name}`)])
   
   if (!req.type)
     req = {
