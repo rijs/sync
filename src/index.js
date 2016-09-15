@@ -137,9 +137,15 @@ const headers = ripple => next => res => {
 }
 
 const io = opts => {
+  const transports = client 
+  && document.currentScript
+  && document.currentScript.getAttribute('transports')
+  && document.currentScript.getAttribute('transports').split(',')
+  || undefined
+
   const r = !client ? require('socket.io')(opts.server || opts)
-          : window.io ? window.io({ transports: ['websocket', 'polling'] })
-          : is.fn(require('socket.io-client')) ? require('socket.io-client')({ transports: ['websocket', 'polling'] })
+          : window.io ? window.io({ transports })
+          : is.fn(require('socket.io-client')) ? require('socket.io-client')({ transports })
           : { on: noop, emit: noop }
   r.use = r.use || noop
   return r
