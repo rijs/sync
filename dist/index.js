@@ -119,7 +119,8 @@ var normalize = function normalize(ripple) {
 
     if (!req.name) return next((0, _values2.default)(ripple.resources).map(normalize(ripple)));
 
-    if (!resource) return Promise.resolve([404, err('cannot find ' + req.name)]);
+    // if (!resource)
+    //   return Promise.resolve([404, err(`cannot find ${req.name}`)])
 
     if (!req.type) req = {
       name: req.name,
@@ -233,7 +234,10 @@ var headers = function headers(ripple) {
 
 var io = function io(opts) {
 /* istanbul ignore next */
-  var r = !_client2.default ? require('socket.io')(opts.server || opts) : window.io ? window.io({ transports: ['websocket', 'polling'] }) : _is2.default.fn(require('socket.io-client')) ? require('socket.io-client')({ transports: ['websocket', 'polling'] }) : { on: _noop2.default, emit: _noop2.default };
+  var transports = _client2.default && document.currentScript && document.currentScript.getAttribute('transports') && document.currentScript.getAttribute('transports').split(',') || undefined;
+
+/* istanbul ignore next */
+  var r = !_client2.default ? require('socket.io')(opts.server || opts) : window.io ? window.io({ transports: transports }) : _is2.default.fn(require('socket.io-client')) ? require('socket.io-client')({ transports: transports }) : { on: _noop2.default, emit: _noop2.default };
 /* istanbul ignore next */
   r.use = r.use || _noop2.default;
   return r;
