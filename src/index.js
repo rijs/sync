@@ -118,8 +118,8 @@ const consume = ripple => function(req, res = noop) {
                                        , res(200, deb(`ok ${nametype}`)))
     :  isStandardVerb(req.type)        ? (set(req)(silent(resource).body)
                                        , res(200, deb(`ok ${nametype}`, key.grey)))
-    : !isStandardVerb(req.type)        ? res(405, err('method not allowed', nametype))
-                                       : res(400, err('cannot process', nametype)))
+    : !isStandardVerb(req.type)        ? res(405, deb('method not allowed', nametype))
+                                       : res(400, deb('cannot process', nametype)))
   } catch (e) {
     res(e.status || 500, err(e.message, nametype, '\n', e.stack))
   }
