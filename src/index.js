@@ -1,15 +1,16 @@
 // -------------------------------------------
 // Synchronises resources between server/client
 // -------------------------------------------
-export default function sync(ripple, server){
+export default function sync(ripple, { server, port } = {}){
   log('creating')
-  
-  if (!client && !server) return ripple
-  if (!client) 
+  if (!client) { 
     ripple.to = clean(ripple.to)
-  , values(ripple.types).map(type => type.parse = headers(ripple)(type.parse))
+    values(ripple.types).map(type => type.parse = headers(ripple)(type.parse))
+    server = def(ripple, 'server', server || express().listen(port, d => log('listening', server.address().port)))
+    server.express = key('_events.request')(server) || server.on('request', express())._events.request
+  }
 
-  ripple.io = io(server)
+  def(ripple, 'io', io(server))
   ripple.io.use(ip)
   ripple.req = send(ripple)(ripple)
   ripple.send = client ? send(ripple)(ripple.io) : send(ripple)
@@ -136,14 +137,14 @@ const headers = ripple => next => res => {
   return next ? next(res) : res
 }
 
-const io = opts => {
+const io = server => {
   const transports = client 
   && document.currentScript
   && document.currentScript.getAttribute('transports')
   && document.currentScript.getAttribute('transports').split(',')
   || undefined
 
-  const r = !client ? require('socket.io')(opts.server || opts)
+  const r = !client ? require('socket.io')(server)
           : window.io ? window.io({ transports })
           : is.fn(require('socket.io-client')) ? require('socket.io-client')({ transports })
           : { on: noop, emit: noop }
@@ -179,6 +180,7 @@ const clean = next => (req, res) => {
   return (next || identity)(req, res)
 }
 
+import express from 'express'
 import identity from 'utilise/identity'
 import promise from 'utilise/promise'
 import values from 'utilise/values'
@@ -191,6 +193,7 @@ import keys from 'utilise/keys'
 import not from 'utilise/not'
 import str from 'utilise/str'
 import set from 'utilise/set'
+import def from 'utilise/def'
 import key from 'utilise/key'
 import by from 'utilise/by'
 import is from 'utilise/is'
