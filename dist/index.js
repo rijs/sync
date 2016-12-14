@@ -5,6 +5,10 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.default = sync;
 
+var _express = require('express');
+
+var _express2 = _interopRequireDefault(_express);
+
 var _identity = require('utilise/identity');
 
 var _identity2 = _interopRequireDefault(_identity);
@@ -55,6 +59,10 @@ var _set = require('utilise/set');
 
 var _set2 = _interopRequireDefault(_set);
 
+var _def = require('utilise/def');
+
+var _def2 = _interopRequireDefault(_def);
+
 var _key = require('utilise/key');
 
 var _key2 = _interopRequireDefault(_key);
@@ -75,17 +83,26 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 // -------------------------------------------
 // Synchronises resources between server/client
 // -------------------------------------------
-function sync(ripple, server) {
+function sync(ripple) {
+  var _ref = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
+
+  var server = _ref.server;
+  var port = _ref.port;
+
   log('creating');
-
 /* istanbul ignore next */
-  if (!_client2.default && !server) return ripple;
-/* istanbul ignore next */
-  if (!_client2.default) ripple.to = clean(ripple.to), (0, _values2.default)(ripple.types).map(function (type) {
-    return type.parse = headers(ripple)(type.parse);
-  });
+  if (!_client2.default) {
+    ripple.to = clean(ripple.to);
+    (0, _values2.default)(ripple.types).map(function (type) {
+      return type.parse = headers(ripple)(type.parse);
+    });
+    server = (0, _def2.default)(ripple, 'server', server || (0, _express2.default)().listen(port, function (d) {
+      return log('listening', server.address().port);
+    }));
+    server.express = (0, _key2.default)('_events.request')(server) || server.on('request', (0, _express2.default)())._events.request;
+  }
 
-  ripple.io = io(server);
+  (0, _def2.default)(ripple, 'io', io(server));
   ripple.io.use(ip);
   ripple.req = send(ripple)(ripple);
 /* istanbul ignore next */
@@ -204,18 +221,18 @@ var consume = function consume(ripple) {
 
     log('recv'.grey, nametype);
     try {
-      !req.name ? res(404, err('not found'.red, req.name)) : !(req = xall(req, res)) ? deb('skip', 'global', nametype) : !(req = xtyp(req, res)) ? deb('skip', 'type', nametype) : !(req = xres(req, res)) ? deb('skip', 'resource', nametype) : !req.key && req.type == 'update' ? (ripple(silent(body(req))), res(200, deb('ok ' + nametype))) : isStandardVerb(req.type) ? ((0, _set2.default)(req)(silent(resource).body), res(200, deb('ok ' + nametype, _key2.default.grey))) : !isStandardVerb(req.type) ? res(405, err('method not allowed', nametype)) : res(400, err('cannot process', nametype));
+      !req.name ? res(404, err('not found'.red, req.name)) : !(req = xall(req, res)) ? deb('skip', 'global', nametype) : !(req = xtyp(req, res)) ? deb('skip', 'type', nametype) : !(req = xres(req, res)) ? deb('skip', 'resource', nametype) : !req.key && req.type == 'update' ? (ripple(silent(body(req))), res(200, deb('ok ' + nametype))) : isStandardVerb(req.type) ? ((0, _set2.default)(req)(silent(resource).body), res(200, deb('ok ' + nametype, _key2.default.grey))) : !isStandardVerb(req.type) ? res(405, deb('method not allowed', nametype)) : res(400, deb('cannot process', nametype));
     } catch (e) {
       res(e.status || 500, err(e.message, nametype, '\n', e.stack));
     }
   };
 };
 
-var body = function body(_ref) {
-  var name = _ref.name;
-  var _body = _ref.body;
-  var value = _ref.value;
-  var headers = _ref.headers;
+var body = function body(_ref2) {
+  var name = _ref2.name;
+  var _body = _ref2.body;
+  var value = _ref2.value;
+  var headers = _ref2.headers;
   return { name: name, headers: headers, body: value };
 };
 
@@ -232,12 +249,12 @@ var headers = function headers(ripple) {
   };
 };
 
-var io = function io(opts) {
+var io = function io(server) {
 /* istanbul ignore next */
   var transports = _client2.default && document.currentScript && document.currentScript.getAttribute('transports') && document.currentScript.getAttribute('transports').split(',') || undefined;
 
 /* istanbul ignore next */
-  var r = !_client2.default ? require('socket.io')(opts.server || opts) : window.io ? window.io({ transports: transports }) : _is2.default.fn(require('socket.io-client')) ? require('socket.io-client')({ transports: transports }) : { on: _noop2.default, emit: _noop2.default };
+  var r = !_client2.default ? require('socket.io')(server) : window.io ? window.io({ transports: transports }) : _is2.default.fn(require('socket.io-client')) ? require('socket.io-client')({ transports: transports }) : { on: _noop2.default, emit: _noop2.default };
 /* istanbul ignore next */
   r.use = r.use || _noop2.default;
   return r;
