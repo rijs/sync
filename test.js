@@ -1,65 +1,50 @@
+require('utilise')
+require('feign')('socket.io', sio)
+require('feign')('express', express)
 var core     = require('rijs.core').default
   , data     = require('rijs.data').default
   , sync     = require('./').default
-  , hashcode = require('utilise/hashcode')
-  , includes = require('utilise/includes')
-  , identity = require('utilise/identity')
-  , promise  = require('utilise/promise')
-  , update   = require('utilise/update')
-  , remove   = require('utilise/remove')
-  , clone    = require('utilise/clone')
-  , falsy    = require('utilise/falsy')
-  , push     = require('utilise/push')
-  , noop     = require('utilise/noop')
-  , keys     = require('utilise/keys')
-  , time     = require('utilise/time')
-  , not      = require('utilise/not')
-  , key      = require('utilise/key')
-  , pop      = require('utilise/pop')
-  , str      = require('utilise/str')
-  , log      = require('utilise/log')('')
-  , is       = require('utilise/is')
-  , arr      = require('utilise/to').arr
   , expect   = require('chai').expect
-  , mockery  = require('mockery')
+  , express  = require('express')
   , request  = { headers: { 'x-forwarded-for': '?' } }
-  , socket, other, sockets, opts, connection
+  , { createServer, Server } = require('http')
 
 describe('Sync', function(){
 
-  before(function(){ 
-    mockery.enable()
-    mockery.registerMock('socket.io', sio)
-  })
-
-  beforeEach(function(){
-    socket = emit({ on: noop, request: { headers: { 'x-forwarded-for': 10 }}})
-    other  = emit({ on: noop, request: { headers: {}, connection: { 'remoteAddress': 20 }} })
-    opts   = null
-  })
-
-  after(function(){ 
-    mockery.disable()
-  })
-
   it('should initialise correctly', function(){  
-    // no opts, no server
-    expect(sync({})).to.be.eql({})
-    expect(sync({}).io).to.be.not.ok
+    // initialise without server
+    const ripple1 = sync(emitterify({}))
+    expect(ripple1).to.be.a('object')
+    expect(ripple1.server instanceof Server).to.be.ok
+    expect(ripple1.server).to.be.a('object')
+    expect(ripple1.send).to.be.a('function')
+    expect(ripple1.req).to.be.a('function')
+    expect(ripple1.to).to.be.a('function')
+    expect(ripple1.io).to.be.a('object')
 
-    // opts
-    expect(sync(data(core()), { foo: 'bar' })).to.be.ok
-    expect(opts).to.be.eql({ foo: 'bar' })
+    // initialise with express server
+    const ripple2 = sync(data(core()), { server: createServer(express()) })
+    expect(ripple2).to.be.a('function')
+    expect(ripple2.server instanceof Server).to.be.ok
+    expect(ripple2.server.express.name).to.be.equal('app')
+    expect(ripple2.send).to.be.a('function')
+    expect(ripple2.req).to.be.a('function')
+    expect(ripple2.to).to.be.a('function')
+    expect(ripple2.io).to.be.a('object')
 
-    // opts + server
-    const ripple = sync(data(core()), { server: { foo: 'bar' }})
-    expect(opts).to.be.eql({ foo: 'bar' })
-    expect(ripple.io).to.be.ok
-    expect(ripple.send).to.be.a('function')
+    // initialise with plain server
+    const ripple3 = sync(data(core()), { server: createServer() })
+    expect(ripple3).to.be.a('function')
+    expect(ripple3.server instanceof Server).to.be.ok
+    expect(ripple3.server.express.name).to.be.equal('app')
+    expect(ripple3.send).to.be.a('function')
+    expect(ripple3.req).to.be.a('function')
+    expect(ripple3.to).to.be.a('function')
+    expect(ripple3.io).to.be.a('object')
   })
 
   it('should send change', function(done){  
-    to(done, null, null, null, [
+    sendto(done, null, null, null, [
       { name: 'foo', time: 0, type: 'update', value: { bar: 'baz' }, headers: { 'content-type': 'application/data' } }
     , { name: 'foo', time: 1, type: 'update', value: { baz: 'four' }, headers: { 'content-type': 'application/data' } }
     , { name: 'foo', time: 2, type: 'update', key: 'bar.foo', value: 'seven' }
@@ -67,7 +52,7 @@ describe('Sync', function(){
   })
 
   it('should send change - resource', function(done){  
-    to(done, hash, null, null, [
+    sendto(done, hash, null, null, [
       { name: 'foo', time: 0, type: 'update', value: { hash: 1007607064 }, headers: { 'content-type': 'application/data' } }
     , { name: 'foo', time: 1, type: 'update', value: { hash: -273689001 }, headers: { 'content-type': 'application/data' } }
     , { name: 'foo', time: 2, type: 'update', key: 'bar.foo', value: { hash: 109330445  } }
@@ -75,7 +60,7 @@ describe('Sync', function(){
   })
 
   it('should send change - type', function(done){  
-    to(done, null, hash, null, [
+    sendto(done, null, hash, null, [
       { name: 'foo', time: 0, type: 'update', value: { hash: 1007607064 }, headers: { 'content-type': 'application/data' } }
     , { name: 'foo', time: 1, type: 'update', value: { hash: -273689001 }, headers: { 'content-type': 'application/data' } }
     , { name: 'foo', time: 2, type: 'update', key: 'bar.foo', value: { hash: 109330445  } }
@@ -83,7 +68,7 @@ describe('Sync', function(){
   })
 
   it('should send change - global', function(done){  
-    to(done, null, null, hash, [
+    sendto(done, null, null, hash, [
       { name: 'foo', time: 0, type: 'update', value: { hash: 1007607064 }, headers: { 'content-type': 'application/data' } }
     , { name: 'foo', time: 1, type: 'update', value: { hash: -273689001 }, headers: { 'content-type': 'application/data' } }
     , { name: 'foo', time: 2, type: 'update', key: 'bar.foo', value: { hash: 109330445  } }
@@ -91,7 +76,7 @@ describe('Sync', function(){
   })
 
   it('should send change - block - resource', function(done){  
-    to(done, falsy, null, null, [
+    sendto(done, falsy, null, null, [
       false
     , false
     , false
@@ -99,7 +84,7 @@ describe('Sync', function(){
   })
 
   it('should send change - block - type', function(done){  
-    to(done, null, falsy, null, [
+    sendto(done, null, falsy, null, [
       false
     , false
     , false
@@ -107,7 +92,7 @@ describe('Sync', function(){
   })
 
   it('should send change - block - global', function(done){  
-    to(done, null, null, falsy, [
+    sendto(done, null, null, falsy, [
       false
     , false
     , false
@@ -115,7 +100,7 @@ describe('Sync', function(){
   })
 
   it('should await promise', function(done){  
-    to(done, delay, delay, delay, [
+    sendto(done, delay, delay, delay, [
       { name: 'foo', time: 0, type: 'update', value: '{"bar":"baz"}!!!', headers: { 'content-type': 'application/data' } }
     , { name: 'foo', time: 1, type: 'update', value: '{"baz":"four"}!!!', headers: { 'content-type': 'application/data' } }
     , { name: 'foo', time: 2, type: 'update', key: 'bar.foo', value: 'seven!!!' }
@@ -123,9 +108,10 @@ describe('Sync', function(){
   })
 
   it('should broacast all resources on connection', function(done){  
-    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+    const ripple = sync(data(core()))
         , time = 0
         , type = 'update'
+        , socket = createSocket()
         , expected = [
             { name: 'foo', type, time, headers: {'content-type': 'application/data'}, value: { foo: 'bar' }}
           , { name: 'bar', type, time, headers: {'content-type': 'application/data'}, value: { bar: 'foo' }}
@@ -136,55 +122,58 @@ describe('Sync', function(){
     ripple('bar', { bar: 'foo' }) 
     ripple('baz', { baz: 'boo' }) 
     ripple.io.connect(socket)
-    emitted(expected)
+    emitted(socket, expected)
       .then(done)
       .catch(console.error)
   })
 
   it('should broacast to specific sockets - sid fail', function(done){
-    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+    const ripple = sync(data(core()))
         , { send } = ripple
         , type = 'update'
+        , socket = createSocket()
 
     ripple('foo', { foo: 'bar' })
     ripple.io.connect(socket)
 
     time(10, d => {
       send('sid')()
-      emitted([false])
+      emitted(socket, [])
         .then(done)
         .catch(console.error)
     })
   })
 
   it('should broacast to specific sockets - sid pass', function(done){
-    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+    const ripple = sync(data(core()))
         , { send } = ripple
         , type = 'update'
+        , socket = createSocket()
 
     ripple('foo', { foo: 'bar' })
     ripple.io.connect(socket)
     
     time(10, d => {
-      socket.sessionID = 'sid'
-      send('sid')()
-      emitted([{ name: 'foo', value: { foo: 'bar' }, time: 0, type, headers: {'content-type': 'application/data' }}])
+      emitted(socket, [{ name: 'foo', value: { foo: 'bar' }, time: 0, type, headers: {'content-type': 'application/data' }}])
         .then(done)
         .catch(console.error)
+      socket.sessionID = 'sid'
+      send('sid')()
     })
   })
 
   it('should broacast to specific sockets - socket', function(done){
-    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+    const ripple = sync(data(core()))
         , { send } = ripple
         , type = 'update'
+        , socket = createSocket()
 
     ripple('foo', { foo: 'bar' })
     ripple.io.connect(socket)
   
     time(10, d => {
       send(socket)()
-      emitted([{ name: 'foo', value: { foo: 'bar' }, time: 0, type, headers: {'content-type': 'application/data' }}])
+      emitted(socket, [{ name: 'foo', value: { foo: 'bar' }, time: 0, type, headers: {'content-type': 'application/data' }}])
         .then(done)
         .catch(console.error)
     })
@@ -235,24 +224,29 @@ describe('Sync', function(){
   })
 
   it('should ripple(!) changes', function(done){
-    const ripple = sync(data(core()), { server: { foo: 'bar' }})
-    ripple.io.connect(socket)
-    ripple.io.connect(other)
+    const ripple = sync(data(core()))
+        , socket1 = createSocket()
+        , socket2 = createSocket()
 
-    socket.receive({ name: 'foo', time: 0, type: 'update', value: { bar: 'baz' }})
+    ripple.io.connect(socket1)
+    ripple.io.connect(socket2)
+
+    socket1.receive({ name: 'foo', time: 0, type: 'update', value: { bar: 'baz' }})
     expect(ripple.resources.foo.body).to.eql({ bar: 'baz' })
-    emitted([{ name: 'foo', time: 0, type: 'update', value: { bar: 'baz' }, headers: { 'content-type': 'application/data'}}], other)
-    emitted([])
+    emitted(socket1, [])
+    emitted(socket2, [{ name: 'foo', time: 0, type: 'update', value: { bar: 'baz' }, headers: { 'content-type': 'application/data'}}])
 
     time(10, done)
   })
 
   it('should never send silent headers', function(done){  
-    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+    const ripple = sync(data(core()))
+        , socket = createSocket()
     ripple.io.connect(socket)
 
-    socket.receive.call({}, { name: 'foo', type: 'update', value: { bar: 'baz' }})
-    emitted([{ name: 'foo', time: 0, type: 'update', value: { bar: 'baz' }, headers: { 'content-type': 'application/data'}}])
+    socket.receive.call({ socket: 42 }, { name: 'foo', type: 'update', value: { bar: 'baz' }})
+    expect(ripple.resources.foo.headers.silent).to.be.eql({ socket: 42 })
+    emitted(socket, [{ name: 'foo', time: 0, type: 'update', value: { bar: 'baz' }, headers: { 'content-type': 'application/data'}}])
       .then(done)
       .catch(console.error)
   })
@@ -394,13 +388,14 @@ describe('Sync', function(){
   })
 
   it('should allow emitting custom event and return promise - single socket', function(done){
-    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+    const ripple = sync(data(core()))
         , { send } = ripple
+        , socket = createSocket()
 
     ripple('foo', [])
     send(socket)({ name: 'foo', type: 'update', value: ['bar'] }).then(replies => {
       expect(replies).to.be.eql([['reply 1']])
-      emitted([{ name: 'foo', type: 'update', value: ['bar'], headers: { 'content-type': 'application/data'}}])
+      emitted(socket, [{ name: 'foo', type: 'update', value: ['bar'], headers: { 'content-type': 'application/data'}}])
       done()
     }).catch(console.error)
 
@@ -408,40 +403,47 @@ describe('Sync', function(){
   })
 
   it('should allow emitting custom event and return promise - multiple socket', function(done){
-    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+    const ripple = sync(data(core()))
         , { send } = ripple
+        , socket1 = createSocket()
+        , socket2 = createSocket()
 
     ripple('foo', [])
-    send([socket, other])({ name: 'foo', type: 'update', value: ['bar'] }).then(replies => {
+    send([socket1, socket2])({ name: 'foo', type: 'update', value: ['bar'] }).then(replies => {
       expect(replies).to.be.eql([['reply 2'], ['reply 3']])
-      emitted([{ name: 'foo', type: 'update', value: ['bar'], headers: { 'content-type': 'application/data'} }])
-      emitted([{ name: 'foo', type: 'update', value: ['bar'], headers: { 'content-type': 'application/data'} }], other.emitted)
+      emitted(socket1, [{ name: 'foo', type: 'update', value: ['bar'], headers: { 'content-type': 'application/data'} }])
+      emitted(socket2, [{ name: 'foo', type: 'update', value: ['bar'], headers: { 'content-type': 'application/data'} }])
       done()
     }).catch(console.error)
 
     time(d => {
-      socket.ack('reply 2')
-      other.ack('reply 3')
+      socket1.ack('reply 2')
+      socket2.ack('reply 3')
     })
   })
   
   it('should set ip', function(){  
-    const ripple = sync(data(core()), { server: { foo: 'bar' }})
-    ripple.io.connect(socket)
-    ripple.io.connect(other)
-    expect(socket.ip).to.be.eql(10)
-    expect(other.ip).to.be.eql(20)
+    const ripple = sync(data(core()))
+        , socket1 = createSocket({ headers: { 'x-forwarded-for': 10 }})
+        , socket2 = createSocket({ headers: {}, connection: { 'remoteAddress': 20 }})
+
+    ripple.io.connect(socket1)
+    ripple.io.connect(socket2)
+    expect(socket1.ip).to.be.eql(10)
+    expect(socket2.ip).to.be.eql(20)
   })
 
   it('should be immutable req across sockets', function(done){
-    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+    const ripple = sync(data(core()))
         , { send } = ripple
+        , socket1 = createSocket()
+        , socket2 = createSocket()
 
-    ripple.io.connect(socket)
-    ripple.io.connect(other)
+    ripple.io.connect(socket1)
+    ripple.io.connect(socket2)
     ripple('foo', { foo: 5 }, { to })
-    emitted([false])
-    emitted([false], other)
+    emitted(socket1, [])
+    emitted(socket2, [])
     time(10, done)
 
     function to(req) {
@@ -450,45 +452,53 @@ describe('Sync', function(){
     }
   })
 
-  it('should allow sending req to self', function(){
-    const ripple = sync(data(core()), { server: { foo: 'bar' }})
-        , req = ripple.send(ripple)
+  it('should allow sending req to self', function(done){
+    const ripple = sync(data(core()))
         , increment = ({ name }) => ({ name, type: 'update', value: { counter: ripple('store').counter + 1 }})
         , decrement = ({ name }) => ({ name, type: 'update', value: { counter: ripple('store').counter - 1 }})
-    
+        , socket = createSocket()
+
     ripple.io.connect(socket)
 
-    ripple('store', { counter: 5 }, { from })
+    ripple('store', { counter: 5 }, { from, to })
     expect(ripple('store')).to.eql({ counter: 5 })
 
-    req('store', 'INCREMENT')
-    req({ name: 'store', type: 'INCREMENT' })
+    ripple.req('store', 'INCREMENT')
+    ripple.req({ name: 'store', type: 'INCREMENT' })
+    emitted(socket, [
+      { name: 'store', value: { counter: 5 }, time: 0, type: 'update', headers: {'content-type': 'application/data' }}
+    , { name: 'store', value: { counter: 6 }, time: 1, type: 'update', headers: {'content-type': 'application/data' }}
+    , { name: 'store', value: { counter: 7 }, time: 2, type: 'update', headers: {'content-type': 'application/data' }}
+    ]).catch(console.error)
 
     time(20, d => {
-      emitted([{ name: 'store', value: { counter: 7 }, time: 2, type: 'update', headers: {'content-type': 'application/data' }}])
       expect(ripple('store')).to.eql({ counter: 7 })
-      
-      req('store', 'DECREMENT')
-      req({ name: 'store', type: 'DECREMENT' })
+      ripple.req('store', 'DECREMENT')
+      ripple.req({ name: 'store', type: 'DECREMENT' })
+      emitted(socket, [
+        { name: 'store', value: { counter: 6 }, time: 3, type: 'update', headers: {'content-type': 'application/data' }}
+      , { name: 'store', value: { counter: 5 }, time: 4, type: 'update', headers: {'content-type': 'application/data' }}
+      ]).catch(console.error)
 
       time(20, d => {
-        emitted([{ name: 'store', value: { counter: 5 }, time: 4, type: 'update', headers: {'content-type': 'application/data' }}])
         expect(ripple('store')).to.eql({ counter: 5 })
+        done()
       })
     })
     
+    function to(req) {
+      req.value = clone(req.value)
+      return req
+    }
     function from(req, res) {
-      let counter = ripple('store').counter
-        , { type } = req
-
-      return type == 'INCREMENT' ? increment(req, res)
-           : type == 'DECREMENT' ? decrement(req, res)
-                                 : false
+      return req.type == 'INCREMENT' ? increment(req, res)
+           : req.type == 'DECREMENT' ? decrement(req, res)
+                                     : false
     }
   })
 
   it('should allow sending req to self and respond', function(done){
-    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+    const ripple = sync(data(core()))
         , { req } = ripple
         , replied = []
 
@@ -517,21 +527,27 @@ describe('Sync', function(){
   })
 
   it('should not send circular structure', function(done){
-    const ripple = sync(data(core()), { server: { foo: 'bar' }})
+    const ripple = sync(data(core()))
         , a = {}
+        , socket = createSocket()
     
     a.b = a
     ripple.io.connect(socket)
     ripple('circular', a)
-    emitted([])
+    emitted(socket, [])
       .then(done)
       .catch(console.error)
   })
 
 })
 
+function express() {
+  app.listen = d => createServer()
+  return app
+  function app() {}
+}
+
 function sio(o){
-  opts = o
   let sockets = []
     , use = []
     , connect
@@ -543,6 +559,7 @@ function sio(o){
       sockets.push(s)
       use.map(fn => fn(s, noop))
       connect(s)
+      return s
     }
   , on: function(type, fn){
       if (type === 'connection') connect = fn 
@@ -551,44 +568,39 @@ function sio(o){
   }
 }
 
-function emitted(records, s = socket) {
+function emitted(socket, records) {
   const p = promise()
-
-  s.emitted = !records.filter(Boolean).length
-  ? d => { throw new Error("should not have been called") }
-  : sent => {
-      const expected = records.shift()
-      
-      if (!expected) return expect(sent).to.be.not.ok
-      const actual = sent[1]
-      expect(sent[0]).to.eql('change')
-      expect(sent[2]).to.be.a('function')
-      if (expected.headers) {
-        expect(actual.headers['content-type']).to.eql(expected.headers['content-type'])
-        expect(actual.headers.silent).to.eql(expected.headers.silent)
-      } else {
-        expect(actual.headers).to.be.not.ok
-      }
-
-      keys(actual)
-        .filter(not(is('socket')))
-        .filter(not(is('headers')))
-        .map(k => expect(actual[k]).to.be.eql(expected[k]))
-
-      keys(expected)
-        .filter(not(is('headers')))
-        .map(k => expect(actual[k]).to.be.eql(expected[k]))
-
-      !records.length && p.resolve()
+  socket.emitted = actual => {
+    const expected = records.shift()
+    if (!expected) return expect(actual).to.be.not.ok
+    if (expected.headers) {
+      expect(actual.headers['content-type']).to.eql(expected.headers['content-type'])
+      expect(actual.headers.silent).to.eql(expected.headers.silent)
+    } else {
+      expect(actual.headers).to.be.not.ok
     }
+
+    keys(actual)
+      .filter(not(is('socket')))
+      .filter(not(is('headers')))
+      .map(k => expect(actual[k]).to.be.eql(expected[k]))
+
+    keys(expected)
+      .filter(not(is('headers')))
+      .map(k => expect(actual[k]).to.be.eql(expected[k]))
+
+    if (!records.length)
+      p.resolve()
+  }
 
   if (!records.filter(Boolean).length) time(10, d => p.resolve())
   return p
 }
 
-function to(done, res, typ, all, expected) {
-  const ripple = sync(data(core()), { server: { foo: 'bar' }})
+function sendto(done, res, typ, all, expected) {
+  const ripple = sync(data(core()))
       , headers = {}
+      , socket = createSocket()
 
   ripple.io.connect(socket)
   if (res) headers.to = transform(headers.to)(res)
@@ -604,7 +616,7 @@ function to(done, res, typ, all, expected) {
   // deep diff
   update('bar.foo', 'seven')(ripple('foo'))
 
-  emitted(expected)
+  emitted(socket, expected)
     .then(done)
     .catch(console.error)
 }
@@ -619,8 +631,9 @@ const transform = next => fn => req => {
 }
 
 function from(done, res, typ, all, expected) {
-  const ripple = sync(data(core()), { server: { foo: 'bar' }})
+  const ripple = sync(data(core()))
       , headers = {}
+      , socket = createSocket()
 
   ripple.io.connect(socket)
   if (res) headers.from = transform(res)
@@ -648,7 +661,7 @@ function from(done, res, typ, all, expected) {
     expect(ripple.resources.foo.body).to.eql(expected[2]) 
     expect(ripple.resources.foo.headers['content-type']).to.eql('application/data')
     
-    emitted([])
+    emitted(socket, [])
       .then(done)
       .catch(console.error)
   })
@@ -687,14 +700,16 @@ function hash(req) {
 }
 
 function sendrecv(done, args, expected, from, resources) {
-  const server = sync(data(core()), { server: { foo: 'bar' }})
-      , client = sync(data(core()), { server: { foo: 'bar' }})
- 
-  socket.emit = (type, req, res) =>  other.receive(clone(req), clone(res))
-  other.emit  = (type, req, res) => socket.receive(clone(req), clone(res))
+  const server = sync(data(core()))
+      , client = sync(data(core()))
+      , socket1 = createSocket() 
+      , socket2 = createSocket() 
 
-  server.io.connect(socket)
-  client.io.connect(other)
+  socket1.emit = (type, req, res) => socket2.receive(clone(req), res)
+  socket2.emit = (type, req, res) => socket1.receive(clone(req), res)
+
+  server.io.connect(socket1)
+  client.io.connect(socket2)
 
   server('foo', [], (from ? { from } : {}))
   server(resources)
@@ -714,11 +729,15 @@ function sendrecv(done, args, expected, from, resources) {
 
 }
 
-function emit(socket){ 
-  socket.emit = function() {
-    socket.ack = arguments[2]
-    socket.emitted && socket.emitted(arr(arguments))
+function createSocket(request = { headers: { 'x-forwarded-for': '?' } }, socket) {
+  return socket = {
+    on: noop
+  , request
+  , emit: (type, req, res) => {
+      expect(type).to.equal('change')
+      expect(res).to.be.a('function')
+      socket.ack = res
+      if (socket.emitted) socket.emitted(req)
+    }
   }
-
-  return socket
 }
