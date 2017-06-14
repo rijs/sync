@@ -163,7 +163,7 @@ const strip = req => (delete req.socket, req)
 const clean = next => (req, res) => {
   if (is.obj(req.value))
     try { req.value = clone(req.value) } catch (e) { 
-      err('cannot send circular structure') 
+      err('cannot send circular structure', e, req.value)
       return false
     }
 
