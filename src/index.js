@@ -28,19 +28,19 @@ const connected = ripple => socket => {
 
 const broadcast = ripple => (name, change) => {
   (client ? ripple.send : ripple.send())
-    (extend({ name })(change || {}))
+    (extend({ name, key: change.key, type: change.type, value: change.value })(change || {}))
 }
 
 const normalize = (ripple, next = identity) => (name, type, value) => {
+
   let req = is.obj(name) ? name : { name, type, value }
     , resource = ripple.resources[req.name]
-
+  
   if (!req.name)
     return next(values(ripple.resources).map(normalize(ripple)))
 
   // if (!resource)
   //   return Promise.resolve([404, err(`cannot find ${req.name}`)])
-  
   if (!req.type)
     req = {
       name   : req.name

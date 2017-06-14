@@ -127,6 +127,34 @@ describe('Sync', function(){
       .catch(console.error)
   })
 
+  it('should send change with lazy getters', function(done){  
+    function Change(){}
+    Change.prototype.key = 'key'
+    Change.prototype.type = 'update'
+    Change.prototype.value = 'value'
+
+    const ripple = sync(data(core()))
+        , { send } = ripple
+        , type = 'update'
+        , socket = createSocket()
+        , change = new Change()
+
+    ripple('foo', {})
+    ripple.io.connect(socket)
+    expect(keys(change)).to.be.eql([])
+    expect(change.key).to.be.eql('key')
+    expect(change.type).to.be.eql('update')
+    expect(change.value).to.be.eql('value')
+
+    time(10, d => {
+      emitted(socket, [{ name: 'foo', value: 'value', type: 'update', key: 'key', time: 1 }])
+        .then(done)
+        .catch(console.error)
+      set(change)(ripple('foo'))
+    })
+
+  })
+
   it('should broacast to specific sockets - sid fail', function(done){
     const ripple = sync(data(core()))
         , { send } = ripple
