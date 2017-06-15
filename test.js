@@ -182,10 +182,10 @@ describe('Sync', function(){
     ripple.io.connect(socket)
 
     time(10, d => {
-      send('sid')()
       emitted(socket, [])
         .then(done)
         .catch(console.error)
+      send('sid')()
     })
   })
 
@@ -580,8 +580,9 @@ describe('Sync', function(){
     ripple.io.connect(socket)
     ripple('circular', a)
     emitted(socket, [])
-      .then(done)
+      .then(noop)
       .catch(console.error)
+      .then(done)
   })
 
 })
