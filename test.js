@@ -268,6 +268,43 @@ describe('Sync', function(){
     ])
   })
 
+  it('should consume change - promise, resource', function(done){  
+    from(done, asyncHash, null, null, [
+      { hash: 1007607064 }
+    , { hash: -273689001 }
+    , { hash: -273689001, bar: { foo: { hash: 109330445 } } }
+    ])
+  })
+
+  it('should consume change - promise, type', function(done){  
+    from(done, null, asyncHash, null, [
+      { hash: 1007607064 }
+    , { hash: -273689001 }
+    , { hash: -273689001, bar: { foo: { hash: 109330445 } } }
+    ])
+  })
+
+  it('should consume change - promise, global', function(done){  
+    from(done, null, null, asyncHash, [
+      { hash: 1007607064 }
+    , { hash: -273689001 }
+    , { hash: -273689001, bar: { foo: { hash: 109330445 } } }
+    ])
+  })
+
+  it('should consume change - promise - block - resource', function(done){  
+    from(done, async () => {}, null, null, [{}, {}, {}])
+  })
+
+  it('should consume change - promise - block - type', function(done){  
+    from(done, null, async () => {}, null, [{}, {}, {}])
+  })
+
+  it('should consume change - promise - block - global', function(done){  
+    from(done, null, null, async () => {}, [{}, {}, {}])
+  })
+
+
   it('should ripple(!) changes', function(done){
     const ripple = sync(data(core()))
         , socket1 = createSocket()
@@ -688,21 +725,21 @@ function from(done, res, typ, all, expected) {
 
   ripple('foo', {}, headers) 
   
-  time(10, d => {
+  time(10, async d => {
     // new
-    socket.receive({ name: 'foo', time: 0, type: 'update', value: { bar: 'baz' }}, ack)
+    await socket.receive({ name: 'foo', time: 0, type: 'update', value: { bar: 'baz' }}, ack)
     expect(ripple.resources.foo.name).to.eql('foo')
     expect(ripple.resources.foo.body).to.eql(expected[0]) 
     expect(ripple.resources.foo.headers['content-type']).to.eql('application/data')
 
     // replace
-    socket.receive({ name: 'foo', time: 1, type: 'update', value: { baz: 'four' }}, ack)
+    await socket.receive({ name: 'foo', time: 1, type: 'update', value: { baz: 'four' }}, ack)
     expect(ripple.resources.foo.name).to.eql('foo') 
     expect(ripple.resources.foo.body).to.eql(expected[1]) 
     expect(ripple.resources.foo.headers['content-type']).to.eql('application/data')
 
     // deep diff
-    socket.receive({ name: 'foo', time: 2, type: 'update', value: 'seven', key: 'bar.foo' }, ack)
+    await socket.receive({ name: 'foo', time: 2, type: 'update', value: 'seven', key: 'bar.foo' }, ack)
     expect(ripple.resources.foo.name).to.eql('foo') 
     expect(ripple.resources.foo.body).to.eql(expected[2]) 
     expect(ripple.resources.foo.headers['content-type']).to.eql('application/data')
@@ -741,6 +778,11 @@ function delay(req) {
 }
 
 function hash(req) {
+  req.value = { hash: hashcode(str(req.value)) }
+  return req
+}
+
+async function asyncHash(req) {
   req.value = { hash: hashcode(str(req.value)) }
   return req
 }

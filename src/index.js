@@ -110,18 +110,23 @@ const consume = ripple => function(req, res = noop) {
       , xtyp     = type(ripple)(resource).from || identity
       , xall     = ripple.from                 || identity
 
+  const finish = req => 
+    !req                             ? deb('skip', 'async', nametype)
+  : !req.key && req.type == 'update' ? (ripple(silent(body(req)))
+                                     , res(200, deb(`ok ${nametype}`)))
+  :  isStandardVerb(req.type)        ? (set(req)(silent(resource).body)
+                                     , res(200, deb(`ok ${nametype}`, key.grey)))
+  : !isStandardVerb(req.type)        ? res(405, deb('method not allowed', nametype))
+                                     : res(400, deb('cannot process', nametype))
+  
   log('recv'.grey, nametype)
   try { 
-    ( !req.name                        ? res(404, err('not found'.red, req.name))
-    : !(req = xall(req, res))          ? deb('skip', 'global'  , nametype)
-    : !(req = xtyp(req, res))          ? deb('skip', 'type'    , nametype)
-    : !(req = xres(req, res))          ? deb('skip', 'resource', nametype)
-    : !req.key && req.type == 'update' ? (ripple(silent(body(req)))
-                                       , res(200, deb(`ok ${nametype}`)))
-    :  isStandardVerb(req.type)        ? (set(req)(silent(resource).body)
-                                       , res(200, deb(`ok ${nametype}`, key.grey)))
-    : !isStandardVerb(req.type)        ? res(405, deb('method not allowed', nametype))
-                                       : res(400, deb('cannot process', nametype)))
+    return !req.name               ? res(404, err('not found'.red, req.name))
+         : !(req = xall(req, res)) ? deb('skip', 'global'  , nametype)
+         : !(req = xtyp(req, res)) ? deb('skip', 'type'    , nametype)
+         : !(req = xres(req, res)) ? deb('skip', 'resource', nametype)
+         : is.promise(req)         ? req.then(finish)
+                                   : finish(req)
   } catch (e) {
     res(e.status || 500, err(e.message, nametype, '\n', e.stack))
   }
