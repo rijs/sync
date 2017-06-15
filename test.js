@@ -155,6 +155,23 @@ describe('Sync', function(){
 
   })
 
+  it('should mask non-standard redundant fields from change', function(done){  
+    const ripple = sync(data(core()))
+        , { send } = ripple
+        , type = 'update'
+        , socket = createSocket()
+
+    ripple('foo', {})
+    ripple.io.connect(socket)
+
+    time(10, d => {
+      emitted(socket, [{ name: 'foo', value: 'value', type: 'update', key: 'key', time: 1 }])
+        .then(done)
+        .catch(console.error)
+      set({ foo: 'bar', value: 'value', type: 'update', key: 'key' })(ripple('foo'))
+    })
+  })
+
   it('should broacast to specific sockets - sid fail', function(done){
     const ripple = sync(data(core()))
         , { send } = ripple

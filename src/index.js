@@ -86,10 +86,11 @@ const to = (ripple, req, socket, resource) => {
   Promise.resolve(xall(extend({ socket })(req)))
     .then(req => req && xtyp(req))
     .then(req => req && xres(req))
-    .then(req => 
-      !strip(req)      ? p.resolve([false])
+    .then(req => {
+      !req ? p.resolve([false])
     : socket == ripple ? consume(ripple)(req, res)
-                       : socket.emit('change', req, res))
+                       : socket.emit('change', strip(req), res)
+    })
     .catch(e => { throw new Error(err('to failed'.red, e)) })
 
   return p
@@ -158,7 +159,7 @@ const ip = (socket, next) => {
   next()
 }
 
-const strip = req => (delete req.socket, req)
+const strip = key(['name', 'key', 'type', 'value', 'headers', 'time'])
 
 const clean = next => (req, res) => {
   if (is.obj(req.value))
