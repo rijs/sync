@@ -134,11 +134,11 @@ var normalize = function normalize(ripple) {
     var req = _is2.default.obj(name) ? name : { name: name, type: type, value: value },
         resource = ripple.resources[req.name];
 
-    if (!req.name) return next((0, _values2.default)(ripple.resources).map(normalize(ripple))
+    if (!req.name) return next((0, _values2.default)(ripple.resources).map(normalize(ripple)));
 
     // if (!resource)
     //   return Promise.resolve([404, err(`cannot find ${req.name}`)])
-    );if (!req.type) req = {
+    if (!req.type) req = {
       name: req.name,
       type: 'update',
       headers: resource.headers,
@@ -173,12 +173,12 @@ var send = function send(ripple) {
 
       if (promises.length) l('send'.grey, count(promises), req.name);
       return Promise.all(promises);
-    }
-
-    // outgoing transforms
-    );
+    });
   };
-};var to = function to(ripple, req, socket, resource) {
+};
+
+// outgoing transforms
+var to = function to(ripple, req, socket, resource) {
   if ((0, _header2.default)('silent', socket)(resource = ripple.resources[req.name])) return delete resource.headers.silent, false;
 
   var nametype = '(' + req.name + ', ' + req.type + ')',
