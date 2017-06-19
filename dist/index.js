@@ -84,10 +84,9 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 // Synchronises resources between server/client
 // -------------------------------------------
 function sync(ripple) {
-  var _ref = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
-
-  var server = _ref.server;
-  var port = _ref.port;
+  var _ref = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
+      server = _ref.server,
+      port = _ref.port;
 
   log('creating');
 /* istanbul ignore next */
@@ -124,22 +123,22 @@ var connected = function connected(ripple) {
 var broadcast = function broadcast(ripple) {
   return function (name, change) {
 /* istanbul ignore next */
-    (_client2.default ? ripple.send : ripple.send())((0, _extend2.default)({ name: name })(change || {}));
+    (_client2.default ? ripple.send : ripple.send())((0, _extend2.default)({ name: name, key: change.key, type: change.type, value: change.value })(change || {}));
   };
 };
 
 var normalize = function normalize(ripple) {
-  var next = arguments.length <= 1 || arguments[1] === undefined ? _identity2.default : arguments[1];
+  var next = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : _identity2.default;
   return function (name, type, value) {
+
     var req = _is2.default.obj(name) ? name : { name: name, type: type, value: value },
         resource = ripple.resources[req.name];
 
-    if (!req.name) return next((0, _values2.default)(ripple.resources).map(normalize(ripple)));
+    if (!req.name) return next((0, _values2.default)(ripple.resources).map(normalize(ripple))
 
     // if (!resource)
     //   return Promise.resolve([404, err(`cannot find ${req.name}`)])
-
-    if (!req.type) req = {
+    );if (!req.type) req = {
       name: req.name,
       type: 'update',
       headers: resource.headers,
@@ -155,7 +154,7 @@ var normalize = function normalize(ripple) {
 
 // send all or some req, to all or some sockets
 var send = function send(ripple) {
-  var l = arguments.length <= 1 || arguments[1] === undefined ? log : arguments[1];
+  var l = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : log;
   return function (who) {
     return normalize(ripple, function (req) {
       var count = function count(sent) {
@@ -174,12 +173,12 @@ var send = function send(ripple) {
 
       if (promises.length) l('send'.grey, count(promises), req.name);
       return Promise.all(promises);
-    });
-  };
-};
+    }
 
-// outgoing transforms
-var to = function to(ripple, req, socket, resource) {
+    // outgoing transforms
+    );
+  };
+};var to = function to(ripple, req, socket, resource) {
   if ((0, _header2.default)('silent', socket)(resource = ripple.resources[req.name])) return delete resource.headers.silent, false;
 
   var nametype = '(' + req.name + ', ' + req.type + ')',
@@ -193,7 +192,7 @@ var to = function to(ripple, req, socket, resource) {
   }).then(function (req) {
     return req && xres(req);
   }).then(function (req) {
-    return !strip(req) ? p.resolve([false]) : socket == ripple ? consume(ripple)(req, res) : socket.emit('change', req, res);
+    !req ? p.resolve([false]) : socket == ripple ? consume(ripple)(req, res) : socket.emit('change', strip(req), res);
   }).catch(function (e) {
     throw new Error(err('to failed'.red, e));
   });
@@ -210,7 +209,7 @@ var to = function to(ripple, req, socket, resource) {
 var consume = function consume(ripple) {
   return function (req) {
 /* istanbul ignore next */
-    var res = arguments.length <= 1 || arguments[1] === undefined ? _noop2.default : arguments[1];
+    var res = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : _noop2.default;
 
     var nametype = '(' + req.name + ', ' + req.type + ')',
         resource = ripple.resources[req.name],
@@ -219,9 +218,13 @@ var consume = function consume(ripple) {
         xtyp = type(ripple)(resource).from || _identity2.default,
         xall = ripple.from || _identity2.default;
 
+    var finish = function finish(req) {
+      return !req ? deb('skip', 'async', nametype) : !req.key && req.type == 'update' ? (ripple(silent(body(req))), res(200, deb('ok ' + nametype))) : isStandardVerb(req.type) ? ((0, _set2.default)(req)(silent(resource).body), res(200, deb('ok ' + nametype, _key2.default.grey))) : !isStandardVerb(req.type) ? res(405, deb('method not allowed', nametype)) : res(400, deb('cannot process', nametype));
+    };
+
     log('recv'.grey, nametype);
     try {
-      !req.name ? res(404, err('not found'.red, req.name)) : !(req = xall(req, res)) ? deb('skip', 'global', nametype) : !(req = xtyp(req, res)) ? deb('skip', 'type', nametype) : !(req = xres(req, res)) ? deb('skip', 'resource', nametype) : !req.key && req.type == 'update' ? (ripple(silent(body(req))), res(200, deb('ok ' + nametype))) : isStandardVerb(req.type) ? ((0, _set2.default)(req)(silent(resource).body), res(200, deb('ok ' + nametype, _key2.default.grey))) : !isStandardVerb(req.type) ? res(405, deb('method not allowed', nametype)) : res(400, deb('cannot process', nametype));
+      return !req.name ? res(404, err('not found'.red, req.name)) : !(req = xall(req, res)) ? deb('skip', 'global', nametype) : !(req = xtyp(req, res)) ? deb('skip', 'type', nametype) : !(req = xres(req, res)) ? deb('skip', 'resource', nametype) : _is2.default.promise(req) ? req.then(finish) : finish(req);
     } catch (e) {
       res(e.status || 500, err(e.message, nametype, '\n', e.stack));
     }
@@ -229,10 +232,10 @@ var consume = function consume(ripple) {
 };
 
 var body = function body(_ref2) {
-  var name = _ref2.name;
-  var _body = _ref2.body;
-  var value = _ref2.value;
-  var headers = _ref2.headers;
+  var name = _ref2.name,
+      body = _ref2.body,
+      value = _ref2.value,
+      headers = _ref2.headers;
   return { name: name, headers: headers, body: value };
 };
 
@@ -265,16 +268,14 @@ var ip = function ip(socket, next) {
   next();
 };
 
-var strip = function strip(req) {
-  return delete req.socket, req;
-};
+var strip = (0, _key2.default)(['name', 'key', 'type', 'value', 'headers', 'time']);
 
 var clean = function clean(next) {
   return function (req, res) {
     if (_is2.default.obj(req.value)) try {
       req.value = (0, _clone2.default)(req.value);
     } catch (e) {
-      err('cannot send circular structure');
+      err('cannot send circular structure', e, req.value);
       return false;
     }
 
