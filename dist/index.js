@@ -91,7 +91,7 @@ function sync(ripple) {
   log('creating');
 /* istanbul ignore next */
   if (!_client2.default) {
-    ripple.to = clean(ripple.to);
+    // ripple.to = clean(ripple.to)
     (0, _values2.default)(ripple.types).map(function (type) {
       return type.parse = headers(ripple)(type.parse);
     });
@@ -187,10 +187,12 @@ var to = function to(ripple, req, socket, resource) {
       xall = ripple.to || _identity2.default,
       p = (0, _promise2.default)();
 
-  Promise.resolve(xall((0, _extend2.default)({ socket: socket })(req))).then(function (req) {
-    return req && xtyp(req);
+  Promise.resolve(clean((0, _extend2.default)({ socket: socket })(req))).then(function (req) {
+    return req && xres(req, socket);
   }).then(function (req) {
-    return req && xres(req);
+    return req && xtyp(req, socket);
+  }).then(function (req) {
+    return req && xall(req, socket);
   }).then(function (req) {
     !req ? p.resolve([false]) : socket == ripple ? consume(ripple)(req, res) : socket.emit('change', strip(req), res);
   }).catch(function (e) {
@@ -270,26 +272,24 @@ var ip = function ip(socket, next) {
 
 var strip = (0, _key2.default)(['name', 'key', 'type', 'value', 'headers', 'time']);
 
-var clean = function clean(next) {
-  return function (req, res) {
-    if (_is2.default.obj(req.value)) try {
-      req.value = (0, _clone2.default)(req.value);
-    } catch (e) {
-      err('cannot send circular structure', e, req.value);
-      return false;
-    }
+var clean = function clean(req) {
+  if (_is2.default.obj(req.value)) try {
+    req.value = (0, _clone2.default)(req.value);
+  } catch (e) {
+    err('cannot send circular structure', e, req.value);
+    return false;
+  }
 
-    if (!req.headers || !req.headers.silent) return (next || _identity2.default)(req, res);
+  if (!req.headers || !req.headers.silent) return req;
 
-    var stripped = {};
+  var stripped = {};
 
-    (0, _keys2.default)(req.headers).filter((0, _not2.default)((0, _is2.default)('silent'))).map(function (header) {
-      return stripped[header] = req.headers[header];
-    });
+  (0, _keys2.default)(req.headers).filter((0, _not2.default)((0, _is2.default)('silent'))).map(function (header) {
+    return stripped[header] = req.headers[header];
+  });
 
-    req.headers = stripped;
-    return (next || _identity2.default)(req, res);
-  };
+  req.headers = stripped;
+  return req;
 };
 
 var type = function type(ripple) {
