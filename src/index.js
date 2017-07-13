@@ -4,7 +4,7 @@
 export default function sync(ripple, { server, port } = {}){
   log('creating')
   if (!client) { 
-    ripple.to = clean(ripple.to)
+    // ripple.to = clean(ripple.to)
     values(ripple.types).map(type => type.parse = headers(ripple)(type.parse))
     server = def(ripple, 'server', server || express().listen(port, d => log('listening', server.address().port)))
     server.express = key('_events.request')(server) || server.on('request', express())._events.request
@@ -83,9 +83,10 @@ const to = (ripple, req, socket, resource) => {
       , xall = ripple.to                 || identity
       , p    = promise()
 
-  Promise.resolve(xall(extend({ socket })(req)))
-    .then(req => req && xtyp(req))
-    .then(req => req && xres(req))
+  Promise.resolve(clean(extend({ socket })(req)))
+    .then(req => req && xres(req, socket))
+    .then(req => req && xtyp(req, socket))
+    .then(req => req && xall(req, socket))
     .then(req => {
       !req ? p.resolve([false])
     : socket == ripple ? consume(ripple)(req, res)
@@ -166,7 +167,7 @@ const ip = (socket, next) => {
 
 const strip = key(['name', 'key', 'type', 'value', 'headers', 'time'])
 
-const clean = next => (req, res) => {
+const clean = req => {
   if (is.obj(req.value))
     try { req.value = clone(req.value) } catch (e) { 
       err('cannot send circular structure', e, req.value)
@@ -174,7 +175,7 @@ const clean = next => (req, res) => {
     }
 
   if (!req.headers || !req.headers.silent) 
-    return (next || identity)(req, res)
+    return req
   
   const stripped = {}
 
@@ -183,7 +184,7 @@ const clean = next => (req, res) => {
     .map(header => stripped[header] = req.headers[header])
 
   req.headers = stripped
-  return (next || identity)(req, res)
+  return req
 }
 
 import express from 'express'

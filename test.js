@@ -19,7 +19,7 @@ describe('Sync', function(){
     expect(ripple1.server).to.be.a('object')
     expect(ripple1.send).to.be.a('function')
     expect(ripple1.req).to.be.a('function')
-    expect(ripple1.to).to.be.a('function')
+    // expect(ripple1.to).to.be.a('function')
     expect(ripple1.io).to.be.a('object')
 
     // initialise with express server
@@ -29,7 +29,7 @@ describe('Sync', function(){
     expect(ripple2.server.express.name).to.be.equal('app')
     expect(ripple2.send).to.be.a('function')
     expect(ripple2.req).to.be.a('function')
-    expect(ripple2.to).to.be.a('function')
+    // expect(ripple2.to).to.be.a('function')
     expect(ripple2.io).to.be.a('object')
 
     // initialise with plain server
@@ -39,7 +39,7 @@ describe('Sync', function(){
     expect(ripple3.server.express.name).to.be.equal('app')
     expect(ripple3.send).to.be.a('function')
     expect(ripple3.req).to.be.a('function')
-    expect(ripple3.to).to.be.a('function')
+    // expect(ripple3.to).to.be.a('function')
     expect(ripple3.io).to.be.a('object')
   })
 
