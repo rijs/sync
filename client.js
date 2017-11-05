@@ -68,14 +68,7 @@ const subscribe = ripple => (name, k) => {
 
   output
     .on('stop')
-    // .map(d => console.log("stop", raw.li.length))
-    .filter(() => {
-      console.log("before", raw.li.length)
-       raw.off(output.next) 
-      console.log("after", raw.li.length)
-
-       return !raw.li.length
-     })
+    .filter(() => raw.off(output.next) && !raw.li.length)
     .map(() => raw.source.emit('stop'))
     .map(() => { ripple.subscriptions[name][k] = undefined })
 

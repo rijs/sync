@@ -885,14 +885,7 @@ var subscribe = function (ripple) { return function (name, k) {
 
   output
     .on('stop')
-    // .map(d => console.log("stop", raw.li.length))
-    .filter(function () {
-      console.log("before", raw.li.length);
-       raw.off(output.next); 
-      console.log("after", raw.li.length);
-
-       return !raw.li.length
-     })
+    .filter(function () { return raw.off(output.next) && !raw.li.length; })
     .map(function () { return raw.source.emit('stop'); })
     .map(function () { ripple.subscriptions[name][k] = undefined; });
 
