@@ -20,8 +20,10 @@
   await test('.subscribe before resource exists', async ({ plan, same }) => {
     plan(4)
     const { ripple, page } = await startup()
+    await page.evaluate(d => { $ = ripple.subscribe('foo').map(d => (console.log("d", d), d)) })
     ripple('foo', 'bar')
-    same('bar', await page.evaluate(d => ($ = ripple.subscribe('foo'))))
+    ripple.emit('loaded', 'foo')
+    same('bar', await page.evaluate(d => $))
     same(1, keys(ripple.server.ws.sockets[0].subscriptions).length)
     await page.evaluate(d => Promise.all($.source.emit('stop')))
     same(str({ undefined: undefined }), await page.evaluate(d => JSON.stringify(ripple.subscriptions.foo)))

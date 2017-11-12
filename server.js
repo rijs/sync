@@ -15,27 +15,28 @@ module.exports = function sync(
   , certs
   , port 
   }, { http: server })
-  ripple.from = xall(ripple)
   return ripple
 }
 
-const processor = ripple => (req, res) => { 
-  // if (!(req.data.name in ripple.resources))
-  //   return res(err('not found', req.data))
-  const resource = ripple.resources[req.data.name]
-      , xres     = key('headers.from')(resource) || identity
-      , xtyp     = key(`types.${key('headers.content-type')(resource)}.from`)(ripple) || identity
-      , xall     = ripple.from || identity
-      
-  return xall(xtyp(xres(req, res), res), res)
+const processor = ripple => async (req, res) => { 
+  let reply
+  return req.binary                       ? req.socket.uploads[req.data.meta.index].emit('file', req)
+       : req.data.type == 'PREUPLOAD'     ? upload(ripple, req, res)
+       : (reply = await xres(ripple, req, res)) ? reply
+       : req.data.type == 'SUBSCRIBE'     ? subscribe(ripple, req, res) 
+                                          : false
 }
 
-const xall = ripple => (req = {}, res) =>
-  (!req || !req.data)          ? req
-: req.binary                   ? req.socket.uploads[req.data.meta.index].emit('file', req)
-: req.data.type == 'SUBSCRIBE' ? subscribe(ripple, req, res) 
-: req.data.type == 'PREUPLOAD' ? upload(ripple, req, res)
-                               : req
+const xres = async (ripple, req, res) => {
+  if (!(req.data.name in ripple.resources))
+    await ripple.on('loaded')
+      .filter(name => name == req.data.name)
+
+  const resource = ripple.resources[req.data.name]
+      , { from = noop } = resource.headers
+
+  return from(req, res)
+}
 
 const subscribe = (ripple, req, res) => ripple
   .on('change')
@@ -49,10 +50,11 @@ const subscribe = (ripple, req, res) => ripple
   .filter(([name]) => name == req.data.name)
   .map(d => d[1])
   .filter(by('key', subset(req.data.value)))
-  
+  .unpromise()
+
 const upload = async (ripple, req, res) => {
   let uploads = req.socket.uploads = req.socket.uploads || {}
-    , { resource, index, fields, size } = req.data
+    , { name, index, fields, size } = req.data
     , upload = emitterify(uploads[index] = fields)
 
   if (size) await upload
@@ -66,7 +68,7 @@ const upload = async (ripple, req, res) => {
   return processor(ripple)({ 
     socket: req.socket
   , data: {
-      name: resource
+      name
     , type: 'UPLOAD'
     , value: upload
     }
@@ -78,10 +80,7 @@ const subset = (target = '') => (source = '') => source.startsWith(target)
 const by = require('utilise/by')
     , is = require('utilise/is')
     , key = require('utilise/key')
-    // , log = require('utilise/log')('[ri/sync]')
-    // , err = require('utilise/err')('[ri/sync]')
-    // , deb = require('utilise/deb')('[ri/sync]')
+    , noop = require('utilise/noop')
     , header = require('utilise/header')
-    , identity = require('utilise/identity')
     , emitterify = require('utilise/emitterify')
     , nametype = (name, type) => `(${name ? name + ', ' : ''}${type ? type : ''})`

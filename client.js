@@ -88,7 +88,7 @@ const subscribe = ripple => (name, k) => {
   return output
 }
 
-const upload = ripple => (resource, form) => {
+const upload = ripple => (name, form) => {
   let index = ++ripple.upload.id
     , fields = {}
     , size = 0
@@ -121,10 +121,10 @@ const upload = ripple => (resource, form) => {
   const output = ripple.send({ 
     files: files.length
   , type: 'PREUPLOAD'
-  , resource
   , fields
   , index
   , size 
+  , name
   }).once('sent', next)
 
   return output
