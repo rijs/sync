@@ -1212,7 +1212,9 @@ var subscribe = function (ripple) { return function (name, k) {
   if (ripple.subscriptions[name][k])
     { output
       .on('start')
-      .map(function () { return output.next(key$3(k)(ripple(name))); }); }
+      .map(function () { return key$3(k)(ripple(name)); })
+      .filter(is_1$2.def)
+      .map(function (initial) { return output.next(initial); }); }
 
   var raw = ripple.subscriptions[name][k] = ripple.subscriptions[name][k] || ripple
     .send(name, 'SUBSCRIBE', k)

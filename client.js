@@ -75,7 +75,9 @@ const subscribe = ripple => (name, k) => {
   if (ripple.subscriptions[name][k])
     output
       .on('start')
-      .map(() => output.next(key(k)(ripple(name))))
+      .map(() => key(k)(ripple(name)))
+      .filter(is.def)
+      .map(initial => output.next(initial))
 
   const raw = ripple.subscriptions[name][k] = ripple.subscriptions[name][k] || ripple
     .send(name, 'SUBSCRIBE', k)
