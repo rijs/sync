@@ -35,8 +35,10 @@ const xres = async (ripple, req, res) => {
   const resource = ripple.resources[req.data.name]
       , { from = noop } = resource.headers
 
-  return from(req, res)
+  return unpromise(from(req, res))
 }
+
+const unpromise = d => (d && d.next ? d.unpromise() : d)
 
 const subscribe = (ripple, req, res) => ripple
   .on('change')
@@ -78,9 +80,7 @@ const upload = async (ripple, req, res) => {
 const subset = (target = '') => (source = '') => source.startsWith(target)
 
 const by = require('utilise/by')
-    , is = require('utilise/is')
     , key = require('utilise/key')
     , noop = require('utilise/noop')
-    , header = require('utilise/header')
     , emitterify = require('utilise/emitterify')
     , nametype = (name, type) => `(${name ? name + ', ' : ''}${type ? type : ''})`
