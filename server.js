@@ -142,6 +142,7 @@ const major = (v, f) =>
     v                     ? v.split('.').shift() 
   : includes('xp')(lo(f)) ? 'xp'
                           : '?'
+
 const toplevelchange = name => o => o
   .filter(arr => !name || arr[0] === name)
   .filter(([name, change]) => !change.key && change.type == 'update')
@@ -156,6 +157,7 @@ const by = require('utilise/by')
     , key = require('utilise/key')
     , keys = require('utilise/keys')
     , noop = require('utilise/noop')
+    , includes = require('utilise/includes')
     , emitterify = require('utilise/emitterify')
     , { LRUMap } = require('lru_map')
     , platform = require('platform')
