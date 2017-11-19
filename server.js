@@ -20,7 +20,7 @@ module.exports = function sync(
   ripple.caches = {}
   ripple
     .on('change')
-    .pipe(toplevelchange())
+    .map(([name]) => name)
     .filter(is.in(ripple.caches))
     .each(name => { delete ripple.caches[name] })
 

@@ -301,25 +301,51 @@
     page.close()
   })
 
-  await test('opt in dynamically transpile objects with functions + updates', async ({ plan, same }) => {
-    plan(2)
+  await test('dynamically transpile objects with functions (opt in) + hot updates', async ({ plan, same }) => {
+    plan(1)
     const { ripple, page } = await startup()
 
     await page.setUserAgent('Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; AS; rv:11.0) like Gecko')
     await page.reload()
-    ripple('arrow', { foo: d => true }, { transpile: { limit: 1 }})
+    ripple('arrow', { fn: d => true }, { transpile: { limit: 1 }})
+  
+    await page.evaluate(d => { 
+      $ = ripple
+        .subscribe('arrow', 'fn')
+        .reduce((acc = [], d) => acc.concat('' +d))
+      
+      results = $.filter(d => d.length == 2)
+      return $
+    })
+    update('fn', d => false)(ripple('arrow'))
 
-    const transpiled1 = await page.evaluate(async d => ('' + (await ripple.get('arrow', 'foo'))))
-    same(transpiled1, 'function (d) { return true; }', 'transpiled1')
-
-    update('foo', d => false)(ripple('arrow'))
-    await page.reload()
-
-    const transpiled2 = await page.evaluate(async d => ('' + (await ripple.get('arrow', 'foo'))))
-    same(transpiled2, 'function (d) { return false; }', 'transpiled2')
+    same(await page.evaluate(d => results), [
+      'function (d) { return true; }'
+    , 'function (d) { return false; }'
+    ], 'transpiled versions')
 
     page.close()
   })
+
+await test('.subscribe on single key', async ({ plan, same }) => {
+  plan(3)
+  const { ripple, page } = await startup()    
+  ripple('foo', { bar: 'boo' })
+  await page.evaluate(d => { results = ripple.subscribe('foo', 'bar')
+    .reduce((acc = [], d) => acc.concat(d))
+    .filter(d => d.length == 2)
+  })
+  
+  update('xxx', 'xxx')(ripple('foo'))
+  update('bar', 'baz')(ripple('foo'))
+  same(['boo', 'baz'], await page.evaluate(d => results))
+
+  await page.evaluate(d => Promise.all(results.source.emit('stop')))
+  same(str({ bar: undefined }), await page.evaluate(d => JSON.stringify(ripple.subscriptions.foo)))
+  same(0, keys(ripple.server.ws.sockets[0].subscriptions).length)
+
+  page.close()
+})  
 
   await test('allow subscribing using numbers as keys', async ({ plan, same }) => {
     plan(1)
