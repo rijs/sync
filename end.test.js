@@ -22,7 +22,6 @@
     const { ripple, page } = await startup()
     await page.evaluate(d => { $ = ripple.subscribe('foo').map(d => (console.log("d", d), d)) })
     ripple('foo', 'bar')
-    ripple.emit('loaded', 'foo')
     same('bar', await page.evaluate(d => $))
     same(1, keys(ripple.server.ws.sockets[0].subscriptions).length)
     await page.evaluate(d => Promise.all($.source.emit('stop')))
@@ -241,6 +240,83 @@
 
     // second component rendereds
     same({ name: 'test', type: 'DRAW', value: '2' }, await received.once('drawn'), 'hot reload')
+
+    page.close()
+  })
+
+  await test('strip server headers', async ({ plan, same }) => {
+    plan(2)
+    const { ripple, page } = await startup()
+        , received = emitterify()
+
+    // capture messages
+    ripple({ 
+      name: 'test'
+    , body: {}
+    , headers: { 
+        from: d => false
+      , loaded: 'loaded'
+      , transpile: 'transpile'
+      , valid: d => d
+      }
+    })
+
+    const test = await page.evaluate(async d => {
+      await ripple.get('test')
+      return { 
+        headers: Object.keys(ripple.resources.test.headers)
+      , valid: typeof ripple.resources.test.headers.valid
+      }
+    })
+    
+    same(test.headers, ['valid', 'content-type'], 'headers stripped')
+    same(test.valid, 'function', 'function headers valid')
+
+    page.close()
+  })
+
+  await test('auto dynamically transpile functions', async ({ plan, same }) => {
+    plan(7)
+    const { ripple, page } = await startup()
+
+    ripple('arrow', d => d)
+
+    same(keys(ripple.caches).length, 0, 'empty cache')
+
+    const untranspiled = await page.evaluate(async d => ('' + await ripple.get('arrow')))
+    same(keys(ripple.caches), ['arrow'], 'one cache')
+    same(ripple.caches.arrow.size, 1, 'one transpilation')
+
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; AS; rv:11.0) like Gecko')
+    await page.reload()
+
+    const transpiled = await page.evaluate(async d => ('' + await ripple.get('arrow')))
+    same(ripple.caches.arrow.size, 2, 'two transpilations')
+    same(untranspiled, 'd => d', 'untranspiled')
+    same(transpiled, 'function (d) { return d; }', 'transpiled')
+    
+    ripple('arrow', d => false)
+    
+    same(keys(ripple.caches).length, 0, 'clear transpilation caches on reload')
+    page.close()
+  })
+
+  await test('opt in dynamically transpile objects with functions + updates', async ({ plan, same }) => {
+    plan(2)
+    const { ripple, page } = await startup()
+
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; AS; rv:11.0) like Gecko')
+    await page.reload()
+    ripple('arrow', { foo: d => true }, { transpile: { limit: 1 }})
+
+    const transpiled1 = await page.evaluate(async d => ('' + (await ripple.get('arrow', 'foo'))))
+    same(transpiled1, 'function (d) { return true; }', 'transpiled1')
+
+    update('foo', d => false)(ripple('arrow'))
+    await page.reload()
+
+    const transpiled2 = await page.evaluate(async d => ('' + (await ripple.get('arrow', 'foo'))))
+    same(transpiled2, 'function (d) { return false; }', 'transpiled2')
 
     page.close()
   })
