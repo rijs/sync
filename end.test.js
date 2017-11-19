@@ -321,6 +321,14 @@
     page.close()
   })
 
+  await test('allow subscribing using numbers as keys', async ({ plan, same }) => {
+    plan(1)
+    const { ripple, page } = await startup()
+    ripple('object', { 10: 20 })
+    same(await page.evaluate(d => ripple.get('object', 10)), 20, 'number key')
+    page.close()
+  })
+
   process.exit(0)
 
   async function startup(){

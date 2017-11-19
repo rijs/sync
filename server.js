@@ -136,7 +136,7 @@ const upload = async (ripple, req, res) => {
   }, res)
 }
 
-const subset = (target = '') => (source = '') => source.startsWith(target)
+const subset = (target = '') => (source = '') => str(source).startsWith(target)
 
 const major = (v, f) => 
     v                     ? v.split('.').shift() 
