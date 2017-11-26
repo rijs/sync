@@ -86,6 +86,7 @@ const subscribe = (ripple, req) => ripple
   .map(arr => arr[1])
   .map(transpile(ripple.caches, req.socket.platform, ripple.resources[req.data.name]))
   .filter(by('key', subset(req.data.value)))
+  .map(({ key, type, value, headers }) => ({ key: str(key).replace(req.data.value, ''), type, value, headers }))
   .unpromise()
 
 const strip = (list, o) => keys(o)

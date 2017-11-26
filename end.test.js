@@ -295,10 +295,10 @@
     same(untranspiled, 'd => d', 'untranspiled')
     same(transpiled, 'function (d) { return d; }', 'transpiled')
     
+    await page.close()
+
     ripple('arrow', d => false)
-    
     same(keys(ripple.caches).length, 0, 'clear transpilation caches on reload')
-    page.close()
   })
 
   await test('dynamically transpile objects with functions (opt in) + hot updates', async ({ plan, same }) => {
@@ -327,31 +327,26 @@
     page.close()
   })
 
-await test('.subscribe on single key', async ({ plan, same }) => {
-  plan(3)
-  const { ripple, page } = await startup()    
-  ripple('foo', { bar: 'boo' })
-  await page.evaluate(d => { results = ripple.subscribe('foo', 'bar')
-    .reduce((acc = [], d) => acc.concat(d))
-    .filter(d => d.length == 2)
-  })
-  
-  update('xxx', 'xxx')(ripple('foo'))
-  update('bar', 'baz')(ripple('foo'))
-  same(['boo', 'baz'], await page.evaluate(d => results))
-
-  await page.evaluate(d => Promise.all(results.source.emit('stop')))
-  same(str({ bar: undefined }), await page.evaluate(d => JSON.stringify(ripple.subscriptions.foo)))
-  same(0, keys(ripple.server.ws.sockets[0].subscriptions).length)
-
-  page.close()
-})  
-
   await test('allow subscribing using numbers as keys', async ({ plan, same }) => {
-    plan(1)
+    plan(2)
     const { ripple, page } = await startup()
-    ripple('object', { 10: 20 })
+    ripple('object', { 10: 20, 30: 40 })
     same(await page.evaluate(d => ripple.get('object', 10)), 20, 'number key')
+    same(await page.evaluate(d => ripple('object')), { 10: 20 }, 'number key update cache')
+    page.close()
+  })
+
+  await test('.subscribe + .get on same sub-resource', async ({ plan, same }) => {
+    plan(3)
+    const { ripple, page } = await startup()
+        , bar = 'bar'
+        , boo = 'boo'
+
+    ripple('foo', { bar, boo })
+    same({ bar, boo }, await page.evaluate(d => ripple.subscribe('foo')), 'subscribe')
+    same('bar', await page.evaluate(d => ripple.get('foo', 'bar')), 'get key')
+    same({ bar, boo }, await page.evaluate(d => ripple('foo')), 'full resource still available')
+
     page.close()
   })
 

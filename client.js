@@ -32,12 +32,12 @@ const get = ripple => (name, k) => {
         .map(d => key(k)(key(`resources.${name}.body`)(ripple)))
 } 
 
-const cache = (ripple, name, k) => change => {
-  // if (k && !change.key && change.type == 'update')
-  //   change = { type: 'update', key: k, value: change.value[k] }
+const cache = (ripple, name, key) => change => {
+  if (key) change.key = `${key}.${change.key}`
   !change.key && change.type == 'update'
     ? ripple(body(extend({ name })(change)))
     : set(change)(name in ripple.resources ? ripple(name) : ripple(name, {}))
+
   return change
 }
 
