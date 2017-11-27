@@ -312,7 +312,7 @@ var wrap = function wrap(d){
   }
 };
 
-var str = function str(d){
+var str$1 = function str(d){
   return d === 0 ? '0'
        : !d ? ''
        : is_1.fn(d) ? '' + d
@@ -322,7 +322,7 @@ var str = function str(d){
 
 var key = function key(k, v){ 
   var set = arguments.length > 1
-    , keys$$1 = is_1.fn(k) ? [] : str(k).split('.').filter(Boolean)
+    , keys$$1 = is_1.fn(k) ? [] : str$1(k).split('.').filter(Boolean)
     , root = keys$$1.shift();
 
   return function deep(o, i){
@@ -646,13 +646,13 @@ var send$1 = function (socket, type) { return function (data, meta) {
   if (data instanceof window.Blob) 
     { return binary(socket, data, meta) }
 
-  var id = str(++socket.id)
+  var id = str$1(++socket.id)
       , output = socket.on(("$" + id))
       , next = function (data, count) {
         if ( count === void 0 ) count = 0;
 
         return socket
-          .send(output.source.subscription = str({ id: id, data: data, type: type }))
+          .send(output.source.subscription = str$1({ id: id, data: data, type: type }))
           .then(function (d) { return output.emit('sent', { id: id, count: count }); });
   };
 
@@ -696,6 +696,88 @@ var binary = function (socket, blob, meta, start, blockSize) {
   return output
 };
 
+var is_1$2 = is$2;
+is$2.fn      = isFunction$1;
+is$2.str     = isString$1;
+is$2.num     = isNumber$1;
+is$2.obj     = isObject$1;
+is$2.lit     = isLiteral$1;
+is$2.bol     = isBoolean$1;
+is$2.truthy  = isTruthy$1;
+is$2.falsy   = isFalsy$1;
+is$2.arr     = isArray$1;
+is$2.null    = isNull$1;
+is$2.def     = isDef$1;
+is$2.in      = isIn$1;
+is$2.promise = isPromise$1;
+is$2.stream  = isStream$1;
+
+function is$2(v){
+  return function(d){
+    return d == v
+  }
+}
+
+function isFunction$1(d) {
+  return typeof d == 'function'
+}
+
+function isBoolean$1(d) {
+  return typeof d == 'boolean'
+}
+
+function isString$1(d) {
+  return typeof d == 'string'
+}
+
+function isNumber$1(d) {
+  return typeof d == 'number'
+}
+
+function isObject$1(d) {
+  return typeof d == 'object'
+}
+
+function isLiteral$1(d) {
+  return d.constructor == Object
+}
+
+function isTruthy$1(d) {
+  return !!d == true
+}
+
+function isFalsy$1(d) {
+  return !!d == false
+}
+
+function isArray$1(d) {
+  return d instanceof Array
+}
+
+function isNull$1(d) {
+  return d === null
+}
+
+function isDef$1(d) {
+  return typeof d !== 'undefined'
+}
+
+function isPromise$1(d) {
+  return d instanceof Promise
+}
+
+function isStream$1(d) {
+  return !!(d && d.next)
+}
+
+function isIn$1(set) {
+  return function(d){
+    return !set ? false  
+         : set.indexOf ? ~set.indexOf(d)
+         : d in set
+  }
+}
+
 var to = { 
   arr: toArray
 , obj: toObject
@@ -714,43 +796,220 @@ function toObject(d) {
 
   function reduce(p,v,i){
     if (i === 0) { p = {}; }
-    p[is_1.fn(by) ? by(v, i) : v[by]] = v;
+    p[is_1$2.fn(by) ? by(v, i) : v[by]] = v;
     return p
   }
 }
 
+var promise_1$2 = promise$2;
+
+function promise$2() {
+  var resolve
+    , reject
+    , p = new Promise(function(res, rej){ 
+        resolve = res, reject = rej;
+      });
+
+  arguments.length && resolve(arguments[0]);
+  p.resolve = resolve;
+  p.reject  = reject;
+  return p
+}
+
+var flatten$3 = function flatten(p,v){ 
+  if (v instanceof Array) { v = v.reduce(flatten, []); }
+  return (p = p || []), p.concat(v) 
+};
+
+var has$3 = function has(o, k) {
+  return k in o
+};
+
+var def$3 = function def(o, p, v, w){
+  if (o.host && o.host.nodeName) { o = o.host; }
+  if (p.name) { v = p, p = p.name; }
+  !has$3(o, p) && Object.defineProperty(o, p, { value: v, writable: w });
+  return o[p]
+};
+
+var emitterify$3 = function emitterify(body) {
+  body = body || {};
+  def$3(body, 'emit', emit, 1);
+  def$3(body, 'once', once, 1);
+  def$3(body, 'off', off, 1);
+  def$3(body, 'on', on, 1);
+  body.on['*'] = body.on['*'] || [];
+  return body
+
+  function emit(type, pm, filter) {
+    var li = body.on[type.split('.')[0]] || []
+      , results = [];
+
+    for (var i = 0; i < li.length; i++)
+      { if (!li[i].ns || !filter || filter(li[i].ns))
+        { results.push(call(li[i].isOnce ? li.splice(i--, 1)[0] : li[i], pm)); } }
+
+    for (var i = 0; i < body.on['*'].length; i++)
+      { results.push(call(body.on['*'][i], [type, pm])); }
+
+    return results.reduce(flatten$3, [])
+  }
+
+  function call(cb, pm){
+    return cb.next             ? cb.next(pm) 
+         : pm instanceof Array ? cb.apply(body, pm) 
+                               : cb.call(body, pm) 
+  }
+
+  function on(type, opts, isOnce) {
+    var id = type.split('.')[0]
+      , ns = type.split('.')[1]
+      , li = body.on[id] = body.on[id] || []
+      , cb = typeof opts == 'function' ? opts : 0;
+
+    return !cb &&  ns ? (cb = body.on[id]['$'+ns]) ? cb : push(observable(body, opts))
+         : !cb && !ns ? push(observable(body, opts))
+         :  cb &&  ns ? push((remove(li, body.on[id]['$'+ns] || -1), cb))
+         :  cb && !ns ? push(cb)
+                      : false
+
+    function push(cb){
+      cb.isOnce = isOnce;
+      cb.type = id;
+      if (ns) { body.on[id]['$'+(cb.ns = ns)] = cb; }
+      li.push(cb);
+      return cb.next ? cb : body
+    }
+  }
+
+  function once(type, callback){
+    return body.on(type, callback, true)
+  }
+
+  function remove(li, cb) {
+    var i = li.length;
+    while (~--i) 
+      { if (cb == li[i] || cb == li[i].fn || !cb)
+        { li.splice(i, 1); } }
+  }
+
+  function off(type, cb) {
+    remove((body.on[type] || []), cb);
+    if (cb && cb.ns) { delete body.on[type]['$'+cb.ns]; }
+    return body
+  }
+
+  function observable(parent, opts) {
+    opts = opts || {};
+    var o = emitterify(opts.base || promise_1$2());
+    o.i = 0;
+    o.li = [];
+    o.fn = opts.fn;
+    o.parent = parent;
+    o.source = opts.fn ? o.parent.source : o;
+    
+    o.on('stop', function(reason){
+      return o.type
+        ? o.parent.off(o.type, o)
+        : o.parent.off(o)
+    });
+
+    o.each = function(fn) {
+      var n = fn.next ? fn : observable(o, { fn: fn });
+      o.li.push(n);
+      return n
+    };
+
+    o.pipe = function(fn) {
+      return fn(o)
+    };
+
+    o.map = function(fn){
+      return o.each(function(d, i, n){ return n.next(fn(d, i, n)) })
+    };
+
+    o.filter = function(fn){
+      return o.each(function(d, i, n){ return fn(d, i, n) && n.next(d) })
+    };
+
+    o.reduce = function(fn, acc) {
+      return o.each(function(d, i, n){ return n.next(acc = fn(acc, d, i, n)) })
+    };
+
+    o.unpromise = function(){ 
+      var n = observable(o, { base: {}, fn: function(d){ return n.next(d) } });
+      o.li.push(n);
+      return n
+    };
+
+    o.next = function(value) {
+      o.resolve && o.resolve(value);
+      return o.li.length 
+           ? o.li.map(function(n){ return n.fn(value, n.i++, n) })
+           : value
+    };
+
+    o.until = function(stop){
+      stop.each(function(){ o.source.emit('stop'); });
+      return o
+    };
+
+    o.off = function(fn){
+      return remove(o.li, fn), o
+    };
+
+    o[Symbol.asyncIterator] = function(){ 
+      return { 
+        next: function(){ 
+          return o.wait = new Promise(function(resolve){
+            o.wait = true;
+            o.map(function(d, i, n){
+              delete o.wait;
+              o.off(n);
+              resolve({ value: d, done: false });
+            });
+            o.emit('pull', o);
+          })
+        }
+      }
+    };
+
+    return o
+  }
+};
+
 var act = { add: add, update: update, remove: remove };
-var str$3 = JSON.stringify;
+var str$4 = JSON.stringify;
 var parse$1 = JSON.parse;
 
 var set = function set(d, skipEmit) {
   return function(o, existing, max) {
-    if (!is_1.obj(o) && !is_1.fn(o))
+    if (!is_1$2.obj(o) && !is_1$2.fn(o))
       { return o }
 
-    if (!is_1.obj(d)) { 
+    if (!is_1$2.obj(d)) { 
       var log = existing || o.log || []
         , root = o;
 
-      if (!is_1.def(max)) { max = log.max || 0; }
+      if (!is_1$2.def(max)) { max = log.max || 0; }
       if (!max)    { log = []; }
       if (max < 0) { log = log.concat(null); }
       if (max > 0) {
-        var s = str$3(o);
+        var s = str$4(o);
         root = parse$1(s); 
         log = log.concat({ type: 'update', value: parse$1(s), time: log.length });
       } 
 
-      def(log, 'max', max);
+      def$3(log, 'max', max);
       
       root.log 
         ? (root.log = log)
-        : def(emitterify(root, null), 'log', log, 1);
+        : def$3(emitterify$3(root, null), 'log', log, 1);
 
       return root
     }
 
-    if (is_1.def(d.key)) {
+    if (is_1$2.def(d.key)) {
       if (!apply(o, d.type, (d.key = '' + d.key).split('.').filter(Boolean), d.value))
         { return false }
     } else
@@ -783,14 +1042,14 @@ function apply(body, type, path, value) {
 }
 
 function add(o, k, v) {
-  is_1.arr(o) 
+  is_1$2.arr(o) 
     ? o.splice(k, 0, v) 
     : (o[k] = v);
 }
 
 function update(o, k, v) {
-  if (!is_1.num(k) && !k) {
-    if (!is_1.obj(v)) { return true }
+  if (!is_1$2.num(k) && !k) {
+    if (!is_1$2.obj(v)) { return true }
     for (var x in o) { delete o[x]; }
     for (var x in v) { o[x] = v[x]; }
   } else 
@@ -798,7 +1057,7 @@ function update(o, k, v) {
 }
 
 function remove(o, k, v) { 
-  is_1.arr(o) 
+  is_1$2.arr(o) 
     ? o.splice(k, 1)
     : delete o[k];
 }
@@ -806,6 +1065,54 @@ function remove(o, k, v) {
 var not = function not(fn){
   return function(){
     return !fn.apply(this, arguments)
+  }
+};
+
+var wrap$3 = function wrap(d){
+  return function(){
+    return d
+  }
+};
+
+var keys$2 = function keys(o) { 
+  return Object.keys(is_1$2.obj(o) || is_1$2.fn(o) ? o : {})
+};
+
+var str$5 = function str(d){
+  return d === 0 ? '0'
+       : !d ? ''
+       : is_1$2.fn(d) ? '' + d
+       : is_1$2.obj(d) ? JSON.stringify(d)
+       : String(d)
+};
+
+var key$3 = function key(k, v){ 
+  var set = arguments.length > 1
+    , keys = is_1$2.fn(k) ? [] : str$5(k).split('.').filter(Boolean)
+    , root = keys.shift();
+
+  return function deep(o, i){
+    var masked = {};
+    
+    return !o ? undefined 
+         : !is_1$2.num(k) && !k ? (set ? replace(o, v) : o)
+         : is_1$2.arr(k) ? (k.map(copy), masked)
+         : o[k] || !keys.length ? (set ? ((o[k] = is_1$2.fn(v) ? v(o[k], i) : v), o)
+                                       :  (is_1$2.fn(k) ? k(o) : o[k]))
+                                : (set ? (key(keys.join('.'), v)(o[root] ? o[root] : (o[root] = {})), o)
+                                       :  key(keys.join('.'))(o[root]))
+
+    function copy(k){
+      var val = key(k)(o);
+      if (val != undefined) 
+        { key(k, is_1$2.fn(val) ? wrap$3(val) : val)(masked); }
+    }
+
+    function replace(o, v) {
+      keys$2(o).map(function(k){ delete o[k]; });
+      keys$2(v).map(function(k){ o[k] = v[k]; });
+      return o
+    }
   }
 };
 
@@ -817,12 +1124,33 @@ var copy = function copy(from, to){
 
 var extend = function extend(to){ 
   return function(from){
-    keys(from)
-      .filter(not(is_1.in(to)))
+    keys$2(from)
+      .filter(not(is_1$2.in(to)))
       .map(copy(from, to));
 
     return to
   }
+};
+
+var datum$3 = function datum(node){
+  return node.__data__
+};
+
+var from_1$2 = from$2;
+from$2.parent = fromParent$1;
+
+function from$2(o){
+  return function(k){
+    return key$3(k)(o)
+  }
+}
+
+function fromParent$1(k){
+  return datum$3(this.parentNode)[k]
+}
+
+var values$3 = function values(o) {
+  return !o ? [] : keys$2(o).map(from_1$2(o))
 };
 
 var client = function sync(
@@ -846,24 +1174,24 @@ var client = function sync(
 };
 
 var send = function (xrs) { return function (name, type, value) { return name instanceof Blob ? xrs(name, type)
-: is_1.obj(name)         ? xrs(name)
+: is_1$2.obj(name)         ? xrs(name)
                        : xrs({ name: name, type: type, value: value }); }; };
 
 var get = function (ripple) { return function (name, k) {
   ripple.subscriptions[name] = ripple.subscriptions[name] || {};
-  if (is_1.arr(k)) { return Promise.all(k.map(function (k) { return ripple.get(name, k); })) }
-  var existing = key(k)(key(("resources." + name + ".body"))(ripple));
+  if (is_1$2.arr(k)) { return Promise.all(k.map(function (k) { return ripple.get(name, k); })) }
+  var existing = key$3(k)(key$3(("resources." + name + ".body"))(ripple));
 
   return k in ripple.subscriptions[name] && existing 
     ? Promise.resolve(existing)
     : ripple
         .subscribe(name, k)
         .filter(function (d, i, n) { return n.source.emit('stop'); })
-        .map(function (d) { return key(k)(key(("resources." + name + ".body"))(ripple)); })
+        .map(function (d) { return key$3(k)(key$3(("resources." + name + ".body"))(ripple)); })
 }; }; 
 
-var cache = function (ripple, name, key$$1) { return function (change) {
-  if (key$$1) { change.key = key$$1 + "." + (change.key); }
+var cache = function (ripple, name, key) { return function (change) {
+  if (is_1$2.def(key)) { change.key = key + "." + (str(change.key)); }
   !change.key && change.type == 'update'
     ? ripple(body(extend({ name: name })(change)))
     : set(change)(name in ripple.resources ? ripple(name) : ripple(name, {}));
@@ -873,7 +1201,7 @@ var cache = function (ripple, name, key$$1) { return function (change) {
 
 // TODO: factor out
 var merge = function (streams) {
-  var output = emitterify().on('next')
+  var output = emitterify$3().on('next')
       , latest = [];
 
   streams.map(function ($, i) { return $.each(function (value) {
@@ -890,10 +1218,10 @@ var merge = function (streams) {
 };
 
 var subscribe = function (ripple) { return function (name, k) {
-  if (is_1.arr(name)) { return merge(name.map(function (n) { return ripple.subscribe(n, k); })) }
+  if (is_1$2.arr(name)) { return merge(name.map(function (n) { return ripple.subscribe(n, k); })) }
   ripple.subscriptions[name] = ripple.subscriptions[name] || {};
-  if (is_1.arr(k)) { return merge(k.map(function (k) { return ripple.subscribe(name, k); })).map(function (d) { return key(k)(ripple(name)); }) } // merge(ripple, name, k)
-  var output = emitterify().on('next');
+  if (is_1$2.arr(k)) { return merge(k.map(function (k) { return ripple.subscribe(name, k); })).map(function (d) { return key$3(k)(ripple(name)); }) } // merge(ripple, name, k)
+  var output = emitterify$3().on('next');
 
   output
     .on('stop')
@@ -904,14 +1232,14 @@ var subscribe = function (ripple) { return function (name, k) {
   if (ripple.subscriptions[name][k])
     { output
       .on('start')
-      .map(function () { return key(k)(ripple(name)); })
-      .filter(is_1.def)
+      .map(function () { return key$3(k)(ripple(name)); })
+      .filter(is_1$2.def)
       .map(function (initial) { return output.next(initial); }); }
 
   var raw = ripple.subscriptions[name][k] = ripple.subscriptions[name][k] || ripple
     .send(name, 'SUBSCRIBE', k)
     .map(cache(ripple, name, k))
-    .map(function (d) { return key(k)(ripple(name)); });
+    .map(function (d) { return key$3(k)(ripple(name)); });
     // .reduce((acc = {}, d, i) => i ? set(d)(acc) : d.value)
     
   raw.each(output.next);
@@ -945,7 +1273,7 @@ var upload = function (ripple) { return function (name, form) {
           .then(next)
       };
 
-  var files = keys(form)
+  var files = keys$2(form)
     .map(function (field) { return (fields[field] = form[field], field); })
     .filter(function (field) { return form[field] instanceof FileList; })
     .map(function (field) { 
@@ -954,7 +1282,7 @@ var upload = function (ripple) { return function (name, form) {
         .map(function (f) { return (size += f.size, f); })
         .map(function (f, i) { return ({ field: field, filename: f.name, i: i, blob: f, sent: 0 }); })
     })
-    .reduce(flatten, []);
+    .reduce(flatten$3, []);
 
   var output = ripple.send({ 
     files: files.length
@@ -977,7 +1305,7 @@ var body = function (ref) {
 };
 
 var render = function (ripple) { return function (next) { return function (el) { return ripple.deps(el)
-  .filter(not(is_1.in(ripple.subscriptions)))
+  .filter(not(is_1$2.in(ripple.subscriptions)))
   .map(function (dep) { return ripple
     .subscribe(dep); }
     // TOOO: Should be .until(el.once('removed'))
@@ -986,7 +1314,7 @@ var render = function (ripple) { return function (next) { return function (el) {
   )
   .length ? false : next(el); }; }; };
 
-var deps = function (ripple) { return function (el) { return values(ripple.types)
+var deps = function (ripple) { return function (el) { return values$3(ripple.types)
   .filter(function (d) { return d.extract; })
   .map(function (d) { return d.extract(el); })
   .reduce(function (p, v) { return p.concat(v); }, [])
