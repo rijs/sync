@@ -33,7 +33,7 @@ const get = ripple => (name, k) => {
 } 
 
 const cache = (ripple, name, key) => change => {
-  if (key) change.key = `${key}.${change.key}`
+  if (is.def(key)) change.key = `${key}.${str(change.key)}`
   !change.key && change.type == 'update'
     ? ripple(body(extend({ name })(change)))
     : set(change)(name in ripple.resources ? ripple(name) : ripple(name, {}))
