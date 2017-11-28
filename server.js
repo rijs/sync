@@ -163,4 +163,4 @@ const by = require('utilise/by')
     , { LRUMap } = require('lru_map')
     , platform = require('platform')
     , buble = require('buble')
-    , fallback = { chrome: 52, suppress: true }
+    , fallback = { ie: 8, suppress: true }
