@@ -43,7 +43,7 @@ const parse = useragent => {
   name = lo(name)
   version = major(version)
   os = {
-    name: lo(os.family.split(' ').shift())
+    name: lo((os.family || '').split(' ').shift())
   , version: major(os.version, os.family)
   }
 
