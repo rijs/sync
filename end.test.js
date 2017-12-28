@@ -283,14 +283,14 @@
 
     same(keys(ripple.caches).length, 0, 'empty cache')
 
-    const untranspiled = await page.evaluate(async d => ('' + await ripple.get('arrow')))
+    const transpiled = await page.evaluate(async d => ('' + await ripple.get('arrow')))
     same(keys(ripple.caches), ['arrow'], 'one cache')
     same(ripple.caches.arrow.size, 1, 'one transpilation')
 
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; AS; rv:11.0) like Gecko')
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.84 Safari/537.36')
     await page.reload()
 
-    const transpiled = await page.evaluate(async d => ('' + await ripple.get('arrow')))
+    const untranspiled = await page.evaluate(async d => ('' + await ripple.get('arrow')))
     same(ripple.caches.arrow.size, 2, 'two transpilations')
     same(untranspiled, 'd => d', 'untranspiled')
     same(transpiled, 'function (d) { return d; }', 'transpiled')
