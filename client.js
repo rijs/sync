@@ -3,74 +3,66 @@ module.exports = function sync(
 , {} = {}
 , { xrs = require('xrs/client') } = {}
 ){
-  ripple.send = send(xrs())
+  ripple.server = xrs()
+  ripple.send = send(ripple)
   ripple.subscribe = subscribe(ripple)
   ripple.subscriptions = {}
   ripple.get = get(ripple)
   ripple.upload = upload(ripple)
   ripple.upload.id = 0
-  ripple.render = render(ripple)(ripple.render)
-  ripple.deps = deps(ripple)
+
+  // TODO: other than cache pushes? ans: use server.type
+  ripple
+    .server
+    .on('recv')
+    .map(({ data, server }, i, n) => cache(ripple, server.name)(data, i, n))
+
   return ripple
 }
 
-const send = xrs => (name, type, value) =>
-  name instanceof Blob ? xrs(name, type)
-: is.obj(name)         ? xrs(name)
-                       : xrs({ name, type, value })
+const send = ({ server }) => (name, type, value) =>
+  name instanceof Blob ? server.send(name, type)
+: is.obj(name)         ? server.send(name)
+                       : server.send({ name, type, value })
 
-const get = ripple => (name, k) => {
-  ripple.subscriptions[name] = ripple.subscriptions[name] || {}
-  if (is.arr(k)) return Promise.all(k.map(k => ripple.get(name, k)))
-  const existing = key(k)(key(`resources.${name}.body`)(ripple))
+const get = ripple => (name, k) => ripple
+  .subscribe(name, k)
+  .filter((d, i, n) => n.source.emit('stop'))
+  .start()
 
-  return k in ripple.subscriptions[name] && existing 
-    ? Promise.resolve(existing)
-    : ripple
-        .subscribe(name, k)
-        .filter((d, i, n) => n.source.emit('stop'))
-        .map(d => key(k)(key(`resources.${name}.body`)(ripple)))
-} 
-
-const cache = (ripple, name, key) => change => {
-  if (is.def(key)) change.key = `${key}.${str(change.key)}`
+const cache = (ripple, name, k) => (change, i, n) => {
+  // debugger
+  name = change.name || name
+  if (is.def(k)) change.key = `${k}.${str(change.key)}`
   !change.key && change.type == 'update'
     ? ripple(body(extend({ name })(change)))
-    : set(change)(name in ripple.resources ? ripple(name) : ripple(name, {}))
+    : set(change)(ripple.resources[name] ? ripple(name) : ripple(name, {}))
 
-  return change
-}
-
-// TODO: factor out
-const merge = streams => {
-  const output = emitterify().on('next')
-      , latest = []
-
-  streams.map(($, i) => 
-    $.each(value => {
-      latest[i] = value
-      output.next(latest)
-    })
-  )
-
-  output
-    .once('stop')
-    .map(d => streams.map($ => $.source.emit('stop')))
-
-  return output
+  ripple.change = assign({ name }, change)
+  // TODO: change.key or key here?
+  return key(k)(ripple(name))
 }
 
 const subscribe = ripple => (name, k) => {
   if (is.arr(name)) return merge(name.map(n => ripple.subscribe(n, k)))
+    .map(d => name.reduce((p, v, i) => (p[v] = d[i], p), {}))
+
   ripple.subscriptions[name] = ripple.subscriptions[name] || {}
-  if (is.arr(k)) return merge(k.map(k => ripple.subscribe(name, k))).map(d => key(k)(ripple(name))) // merge(ripple, name, k)
-  const output = emitterify().on('next')
+  if (is.arr(k)) return merge(k.map(k => ripple.subscribe(name, k)))
+    .map(d => key(k)(ripple(name)))
+  const output = emitterify().on('subscription')
 
   output
     .on('stop')
-    .filter(() => raw.off(output.next) && !raw.li.length)
-    .map(() => raw.source.emit('stop'))
-    .map(() => { ripple.subscriptions[name][k] = undefined })
+    .each((d, i, n) => {
+      raw.subs.splice(raw.subs.indexOf(output), 1)
+      time(1000, () => { 
+        if (raw.subs.length) return
+        raw.source.emit('stop')
+        ripple.subscriptions[name][k] = undefined
+        output.emit('end')
+      })
+    })
 
   if (ripple.subscriptions[name][k])
     output
@@ -82,10 +74,13 @@ const subscribe = ripple => (name, k) => {
   const raw = ripple.subscriptions[name][k] = ripple.subscriptions[name][k] || ripple
     .send(name, 'SUBSCRIBE', k)
     .map(cache(ripple, name, k))
-    .map(d => key(k)(ripple(name)))
-    // .reduce((acc = {}, d, i) => i ? set(d)(acc) : d.value)
-    
-  raw.each(output.next)
+    .each(value => {
+      raw.subs.map(o => o.next(value))
+      delete ripple.change
+    })
+
+  raw.subs = raw.subs || []
+  raw.subs.push(output)
   
   return output
 }
@@ -134,22 +129,6 @@ const upload = ripple => (name, form) => {
 
 const body = ({ name, value, headers }) => ({ name, headers, body: value })
 
-const render = ripple => next => el => ripple.deps(el)
-  .filter(not(is.in(ripple.subscriptions)))
-  .map(dep => ripple
-    .subscribe(dep)
-    // TOOO: Should be .until(el.once('removed'))
-    // .filter(d => !all(el.nodeName).length)
-    // .map((d, i, n) => n.source.unsubscribe())
-  )
-  .length ? false : next(el)
-
-const deps = ripple => el => values(ripple.types)
-  .filter(d => d.extract)
-  .map(d => d.extract(el))
-  .reduce((p, v) => p.concat(v), [])
-  .filter(Boolean)
-
 const is = require('utilise/is')
     , to = require('utilise/to')
     , set = require('utilise/set')
@@ -157,15 +136,41 @@ const is = require('utilise/is')
     , key = require('utilise/key')
     , str = require('utilise/str')
     , keys = require('utilise/keys')
-    , flatten = require('utilise/flatten')
+    , time = require('utilise/time')
     , extend = require('utilise/extend')
     , values = require('utilise/values')
+    , flatten = require('utilise/flatten')
     , emitterify = require('utilise/emitterify')
     , all = node => arr(document.querySelectorAll(node))
     , { min, pow } = Math
+    , { assign } = Object
     , nametype = (name, type) => `(${name ? name + ', ' : ''}${type ? type : ''})`
     , stream = chunks => new require('stream').Readable({
         read(){
           this.push(chunks.length ? new Buffer(new Uint8Array(chunks.shift())) : null)
         }
       })
+
+// TODO: factor out
+const merge = streams => {
+  const output = emitterify().on('merged')
+  output.streams = streams
+
+  streams.map((stream, i) => 
+    stream.each(value => {
+      stream.latest = value
+      const latest = streams.map(d => d.latest)
+      if (latest.every(is.def)) output.next(latest)
+    })
+  )
+
+  output
+    .once('start')
+    .map(d => streams.map($ => $.source.emit('start')))
+
+  output
+    .once('stop')
+    .map(d => streams.map($ => $.source.emit('stop')))
+
+  return output
+}

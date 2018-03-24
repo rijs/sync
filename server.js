@@ -16,7 +16,8 @@ module.exports = function sync(
   , certs
   , port 
   }, { http: server })
-  ripple.server.blacklist = ['loaded', 'transpile', 'from']
+  // TODO: this should be populated by modules
+  ripple.server.blacklist = ['loaded', 'transpile', 'from', 'path']
   ripple.caches = {}
   ripple
     .on('change')
@@ -27,73 +28,70 @@ module.exports = function sync(
   return ripple
 }
 
-const processor = ripple => async (req, res) => { 
+const processor = ripple => (req, res) => { 
   let reply
+
   return req.binary                       ? req.socket.uploads[req.data.meta.index].emit('file', req)
        : req.data.type == 'PREUPLOAD'     ? upload(ripple, req, res)
-       : (reply = await xres(ripple, req, res)) ? reply
-       : req.data.type == 'SUBSCRIBE'     ? subscribe(ripple, req, res) 
+       : (reply = xres(ripple, req, res)) ? reply
+       : req.data.type == 'SUBSCRIBE'     ? subscribe(ripple, req, res)(ripple.resources[req.data.name]) 
                                           : false
 }
 
-const connected = socket => (socket.platform = parse(socket.handshake.headers['user-agent']))
-
-const parse = useragent => {
-  let { name, version, os } = platform.parse(useragent)
-  name = lo(name)
-  version = major(version)
-  os = {
-    name: lo((os.family || '').split(' ').shift())
-  , version: major(os.version, os.family)
-  }
-
-  if (os.name == 'os') os.name == 'osx'
-  if (name == 'chrome mobile') name = 'chrome'
-  if (name == 'microsoft edge') name = 'edge'
-
-  return { 
-    uid: `${name}-${version}-${os.name}-${os.version}`
-  , name
-  , version
-  , os
-  }
-}
-
-const xres = async (ripple, req, res) => {
-  if (!(req.data.name in ripple.resources))
-    await ripple
-      .on('change')
-      .pipe(toplevelchange(req.data.name))
-
-  const resource = ripple.resources[req.data.name]
-      , { from = noop } = resource.headers
+const xres = (ripple, req, res) => {
+  // TODO: this could be multiple resources?
+  const { headers } = ripple.load(req.data.name)
+      , { from = noop } = headers
 
   return unpromise(from(req, res))
 }
 
-const unpromise = d => (d && d.next ? d.unpromise() : d)
-
-const subscribe = (ripple, req) => ripple
+const subscribe = (ripple, { data, socket }) => ({ name, body, headers } = {}) => ripple
   .on('change')
-  .on('start', function(){ 
-    const { body, headers } = ripple.resources[req.data.name] || {}
-    this.next(req.data.value
-      ? [req.data.name, { type: 'update', key: req.data.value, value: key(req.data.value)(body) }]
-      : [req.data.name, { type: 'update', value: body, headers: strip(ripple.server.blacklist, headers) }]
+  .on('start', function(){
+    this.next(data.value
+      ? [name, { type: 'update', key: data.value, value: key(data.value)(body) }]
+      : [name, { type: 'update', value: body, headers: headers }]
     )
   })
-  .filter(([name]) => name == req.data.name)
+  .filter(([n]) => n == name)
   .map(arr => arr[1])
-  .map(transpile(ripple.caches, req.socket.platform, ripple.resources[req.data.name]))
-  .filter(by('key', subset(req.data.value)))
-  .map(({ key, type, value, headers }) => ({ key: str(key).replace(req.data.value, ''), type, value, headers }))
+  .map(transpile(ripple, data.name, socket)) // TODO: plugin (or opt?)
+  .each(dependencies(ripple, data.name, socket)) // TODO: plugin (or opt?)
+  .filter(by('key', subset(data.value)))
+  .map(format(name, data))
+  .map(strip(ripple.server.blacklist))
   .unpromise()
 
-const strip = (list, o) => keys(o)
-  .filter(not(is.in(list)))
-  .reduce((p, k) => (p[k] = o[k], p), {})
+const format = (name, data) => (change) => { 
+  // TODO: separate change and resource here? or combine name into change?
+  if (name !== data.name) change.name = name
+  change.key = str(change.key).replace(data.value, '')
+  return change
+}
 
-const transpile = (caches, platform, { name, headers }, limit) => change => {
+// TODO: rename module?
+const dependencies = ({ dir, server, resources }, name, socket) => async (change, i, n) => {
+  const { headers } = resources[name]
+  // TODO: put back resource level type transforms
+  if (!headers.dependencies)
+    return n.next(change)
+  
+  // TODO: materialise or cache this
+  const existing = values(socket.subscriptions)
+    .filter(by('data.type', 'SUBSCRIBE'))
+    .filter(by('data.value', undefined))
+    .reduce((p, v) => (p[v.data.name] = v.stream, p), {})
+
+  values(headers.dependencies)
+    .map(name => existing[name] || server.recv(socket, { type: 'SUBSCRIBE', name }))
+
+  change.headers = headers
+  n.next(change)
+}
+
+const transpile = ({ caches, resources }, name, { platform }, limit) => change => {
+  const { headers } = resources[name]
   if (!(limit = key('transpile.limit')(headers)) || change.type !== 'update') return change
 
   const browser = `${platform.name}-${platform.version}`
@@ -113,6 +111,14 @@ const transform = (thing, { name, version }) =>
                     .map(key => ({ key, val: transform(thing[key], { name, version }) }))
                     .reduce((p, v) => (p[v.key] = v.val, p), {})
                 : thing
+
+const strip = list => change => {
+  if (!change.headers) return change
+  change.headers = keys(change.headers)
+    .filter(not(is.in(list)))
+    .reduce((p, k) => (p[k] = change.headers[k], p), {})
+  return change 
+} 
 
 const upload = async (ripple, req, res) => {
   let uploads = req.socket.uploads = req.socket.uploads || {}
@@ -139,16 +145,37 @@ const upload = async (ripple, req, res) => {
 
 const subset = (target = '') => (source = '') => str(source).startsWith(target)
 
+const connected = socket => (socket.platform = parse(socket.handshake.headers['user-agent']))
+
+// TODO: factor out
+const unpromise = d => (d && d.next ? d.unpromise() : d)
+
 const major = (v, f) => 
     v                     ? v.split('.').shift() 
   : includes('xp')(lo(f)) ? 'xp'
                           : '?'
 
-const toplevelchange = name => o => o
-  .filter(arr => !name || arr[0] === name)
-  .filter(([name, change]) => !change.key && change.type == 'update')
-  .map(([name]) => name)
-    
+const parse = useragent => {
+  let { name, version, os } = platform.parse(useragent)
+  name = lo(name)
+  version = major(version)
+  os = {
+    name: lo((os.family || '').split(' ').shift())
+  , version: major(os.version, os.family)
+  }
+
+  if (os.name == 'os') os.name == 'osx'
+  if (name == 'chrome mobile') name = 'chrome'
+  if (name == 'microsoft edge') name = 'edge'
+console.log("uid", `${name}-${version}-${os.name}-${os.version}`)
+  return { 
+    uid: `${name}-${version}-${os.name}-${os.version}`
+  , version
+  , name
+  , os
+  }
+}
+
 const by = require('utilise/by')
     , is = require('utilise/is')
     , lo = require('utilise/lo')
@@ -158,6 +185,7 @@ const by = require('utilise/by')
     , key = require('utilise/key')
     , keys = require('utilise/keys')
     , noop = require('utilise/noop')
+    , values = require('utilise/values')
     , includes = require('utilise/includes')
     , emitterify = require('utilise/emitterify')
     , { LRUMap } = require('lru_map')

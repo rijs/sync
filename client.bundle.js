@@ -36,8 +36,11 @@ var def = function def(o, p, v, w){
   return o[p]
 };
 
-var emitterify = function emitterify(body) {
+var noop = function(){};
+
+var emitterify = function emitterify(body, hooks) {
   body = body || {};
+  hooks = hooks || {};
   def(body, 'emit', emit, 1);
   def(body, 'once', once, 1);
   def(body, 'off', off, 1);
@@ -81,7 +84,8 @@ var emitterify = function emitterify(body) {
       cb.isOnce = isOnce;
       cb.type = id;
       if (ns) { body.on[id]['$'+(cb.ns = ns)] = cb; }
-      li.push(cb);
+      li.push(cb)
+      ;(hooks.on || noop)(cb);
       return cb.next ? cb : body
     }
   }
@@ -94,7 +98,7 @@ var emitterify = function emitterify(body) {
     var i = li.length;
     while (~--i) 
       { if (cb == li[i] || cb == li[i].fn || !cb)
-        { li.splice(i, 1); } }
+        { (hooks.off || noop)(li.splice(i, 1)[0]); } }
   }
 
   function off(type, cb) {
@@ -113,9 +117,10 @@ var emitterify = function emitterify(body) {
     o.source = opts.fn ? o.parent.source : o;
     
     o.on('stop', function(reason){
-      return o.type
+      o.type
         ? o.parent.off(o.type, o)
-        : o.parent.off(o)
+        : o.parent.off(o);
+      return o.reason = reason
     });
 
     o.each = function(fn) {
@@ -154,12 +159,17 @@ var emitterify = function emitterify(body) {
     };
 
     o.until = function(stop){
-      stop.each(function(){ o.source.emit('stop'); });
+      (stop.each || stop.then).call(stop, function(reason){ return o.source.emit('stop', reason) });
       return o
     };
 
     o.off = function(fn){
       return remove(o.li, fn), o
+    };
+
+    o.start = function(fn){
+      o.source.emit('start');
+      return o
     };
 
     o[Symbol.asyncIterator] = function(){ 
@@ -338,7 +348,10 @@ var key = function key(k, v){
 
     function copy(k){
       var val = key(k)(o);
-      if (val != undefined) 
+      val = is_1.fn(v)       ? v(val) 
+          : val == undefined ? v
+                           : val;
+    if (val != undefined) 
         { key(k, is_1.fn(val) ? wrap(val) : val)(masked); }
     }
 
@@ -605,12 +618,22 @@ var client$2 = function(ref){
   var socket = ref.socket; if ( socket === void 0 ) socket = index();
 
   socket.id = 0;
+
+  var xrs = emitterify({ 
+    socket: socket
+  , send: send$1(socket)
+  , get subscriptions(){
+      return values(socket.on)
+        .map(function (d) { return d && d[0]; })
+        .filter(function (d) { return d && d.type && d.type[0] == '$'; })
+    }
+  });
   
   socket
     .once('disconnected')
     .map(function (d) { return socket
       .on('connected')
-      .map(reconnect(socket)); }
+      .map(reconnect(xrs)); }
     );
 
   socket
@@ -619,26 +642,26 @@ var client$2 = function(ref){
     .each(function (ref) {
       var id = ref.id;
       var data = ref.data;
+      var server = ref.server;
 
-      return data.exec
-      ? data.exec(socket.on[("$" + id)] && socket.on[("$" + id)][0], data.value)
-      : socket.emit(("$" + id), data);
-  }
-    );
+      // TODO: check/warn if no sub
+      var sink = socket.on[("$" + id)] && socket.on[("$" + id)][0];
 
-  return Object.defineProperty(send$1(socket)
-    , 'subscriptions'
-    , { get: function (d) { return subscriptions(socket); } }
-    )
+      server    ? xrs.emit('recv', { id: id, data: data, server: server })
+    : data.exec ? data.exec(sink, data.value)
+                : socket.emit(("$" + id), data);
+    });
+
+  return xrs
 };
 
-var subscriptions = function (socket) { return values(socket.on)
-  .map(function (d) { return d && d[0]; })
-  .filter(function (d) { return d && d.type && d.type[0] == '$'; }); };
+var reconnect = function (xrs) { return function () { return xrs.subscriptions
+  // .map(d => d.type)
+  .map(function (ref) {
+    var subscription = ref.subscription;
 
-var reconnect = function (socket) { return function () { return subscriptions(socket)
-  .map(function (d) { return d.type; })
-  .map(function (d) { return socket.send(socket.on[d][0].subscription); }); }; };
+    return xrs.socket.send(subscription);
+  }); }; };
 
 var parse = cryo.parse;
 
@@ -665,6 +688,7 @@ var send$1 = function (socket, type) { return function (data, meta) {
     .once('stop')
     .filter(function (reason) { return reason != 'CLOSED'; })
     .map(function (d) { return send$1(socket, 'UNSUBSCRIBE')(id)
+      // TODO: also force stop on close of server created sub (?)
       .filter(function (d, i, n) { return n.source.emit('stop', 'CLOSED'); }); }
     );
 
@@ -809,6 +833,12 @@ var not = function not(fn){
   }
 };
 
+var time = function time(ms, fn) {
+  return arguments.length === 1 
+       ? setTimeout(ms)
+       : setTimeout(fn, ms)
+};
+
 var copy = function copy(from, to){ 
   return function(d){ 
     return to[d] = from[d], d
@@ -834,72 +864,74 @@ var client = function sync(
   if ( ref$1 === void 0 ) ref$1 = {};
   var xrs = ref$1.xrs; if ( xrs === void 0 ) xrs = client$2;
 
-  ripple.send = send(xrs());
+  ripple.server = xrs();
+  ripple.send = send(ripple);
   ripple.subscribe = subscribe(ripple);
   ripple.subscriptions = {};
   ripple.get = get(ripple);
   ripple.upload = upload(ripple);
   ripple.upload.id = 0;
-  ripple.render = render(ripple)(ripple.render);
-  ripple.deps = deps(ripple);
+
+  // TODO: other than cache pushes? ans: use server.type
+  ripple
+    .server
+    .on('recv')
+    .map(function (ref, i, n) {
+      var data = ref.data;
+      var server = ref.server;
+
+      return cache(ripple, server.name)(data, i, n);
+  });
+
   return ripple
 };
 
-var send = function (xrs) { return function (name, type, value) { return name instanceof Blob ? xrs(name, type)
-: is_1.obj(name)         ? xrs(name)
-                       : xrs({ name: name, type: type, value: value }); }; };
+var send = function (ref) {
+  var server = ref.server;
 
-var get = function (ripple) { return function (name, k) {
-  ripple.subscriptions[name] = ripple.subscriptions[name] || {};
-  if (is_1.arr(k)) { return Promise.all(k.map(function (k) { return ripple.get(name, k); })) }
-  var existing = key(k)(key(("resources." + name + ".body"))(ripple));
-
-  return k in ripple.subscriptions[name] && existing 
-    ? Promise.resolve(existing)
-    : ripple
-        .subscribe(name, k)
-        .filter(function (d, i, n) { return n.source.emit('stop'); })
-        .map(function (d) { return key(k)(key(("resources." + name + ".body"))(ripple)); })
-}; }; 
-
-var cache = function (ripple, name, key$$1) { return function (change) {
-  if (is_1.def(key$$1)) { change.key = key$$1 + "." + (str(change.key)); }
-  !change.key && change.type == 'update'
-    ? ripple(body(extend({ name: name })(change)))
-    : set(change)(name in ripple.resources ? ripple(name) : ripple(name, {}));
-
-  return change
-}; };
-
-// TODO: factor out
-var merge = function (streams) {
-  var output = emitterify().on('next')
-      , latest = [];
-
-  streams.map(function ($, i) { return $.each(function (value) {
-      latest[i] = value;
-      output.next(latest);
-    }); }
-  );
-
-  output
-    .once('stop')
-    .map(function (d) { return streams.map(function ($) { return $.source.emit('stop'); }); });
-
-  return output
+  return function (name, type, value) { return name instanceof Blob ? server.send(name, type)
+: is_1.obj(name)         ? server.send(name)
+                       : server.send({ name: name, type: type, value: value }); };
 };
 
+var get = function (ripple) { return function (name, k) { return ripple
+  .subscribe(name, k)
+  .filter(function (d, i, n) { return n.source.emit('stop'); })
+  .start(); }; };
+
+var cache = function (ripple, name, k) { return function (change, i, n) {
+  // debugger
+  name = change.name || name;
+  if (is_1.def(k)) { change.key = k + "." + (str(change.key)); }
+  !change.key && change.type == 'update'
+    ? ripple(body(extend({ name: name })(change)))
+    : set(change)(ripple.resources[name] ? ripple(name) : ripple(name, {}));
+
+  ripple.change = assign({ name: name }, change);
+  // TODO: change.key or key here?
+  return key(k)(ripple(name))
+}; };
+
 var subscribe = function (ripple) { return function (name, k) {
-  if (is_1.arr(name)) { return merge(name.map(function (n) { return ripple.subscribe(n, k); })) }
+  if (is_1.arr(name)) { return merge(name.map(function (n) { return ripple.subscribe(n, k); }))
+    .map(function (d) { return name.reduce(function (p, v, i) { return (p[v] = d[i], p); }, {}); }) }
+
   ripple.subscriptions[name] = ripple.subscriptions[name] || {};
-  if (is_1.arr(k)) { return merge(k.map(function (k) { return ripple.subscribe(name, k); })).map(function (d) { return key(k)(ripple(name)); }) } // merge(ripple, name, k)
-  var output = emitterify().on('next');
+  if (is_1.arr(k)) { return merge(k.map(function (k) { return ripple.subscribe(name, k); }))
+    .map(function (d) { return key(k)(ripple(name)); }) }
+  var output = emitterify().on('subscription');
 
   output
     .on('stop')
-    .filter(function () { return raw.off(output.next) && !raw.li.length; })
-    .map(function () { return raw.source.emit('stop'); })
-    .map(function () { ripple.subscriptions[name][k] = undefined; });
+    .each(function (d, i, n) {
+      raw.subs.splice(raw.subs.indexOf(output), 1);
+      time(1000, function () { 
+        if (raw.subs.length) { return }
+        raw.source.emit('stop');
+        ripple.subscriptions[name][k] = undefined;
+        output.emit('end');
+      });
+    });
 
   if (ripple.subscriptions[name][k])
     { output
@@ -911,10 +943,13 @@ var subscribe = function (ripple) { return function (name, k) {
   var raw = ripple.subscriptions[name][k] = ripple.subscriptions[name][k] || ripple
     .send(name, 'SUBSCRIBE', k)
     .map(cache(ripple, name, k))
-    .map(function (d) { return key(k)(ripple(name)); });
-    // .reduce((acc = {}, d, i) => i ? set(d)(acc) : d.value)
-    
-  raw.each(output.next);
+    .each(function (value) {
+      raw.subs.map(function (o) { return o.next(value); });
+      delete ripple.change;
+    });
+
+  raw.subs = raw.subs || [];
+  raw.subs.push(output);
   
   return output
 }; };
@@ -976,21 +1011,30 @@ var body = function (ref) {
   return ({ name: name, headers: headers, body: value });
 };
 
-var render = function (ripple) { return function (next) { return function (el) { return ripple.deps(el)
-  .filter(not(is_1.in(ripple.subscriptions)))
-  .map(function (dep) { return ripple
-    .subscribe(dep); }
-    // TOOO: Should be .until(el.once('removed'))
-    // .filter(d => !all(el.nodeName).length)
-    // .map((d, i, n) => n.source.unsubscribe())
-  )
-  .length ? false : next(el); }; }; };
 
-var deps = function (ripple) { return function (el) { return values(ripple.types)
-  .filter(function (d) { return d.extract; })
-  .map(function (d) { return d.extract(el); })
-  .reduce(function (p, v) { return p.concat(v); }, [])
-  .filter(Boolean); }; };
+var assign = Object.assign;
+// TODO: factor out
+var merge = function (streams) {
+  var output = emitterify().on('merged');
+  output.streams = streams;
+
+  streams.map(function (stream, i) { return stream.each(function (value) {
+      stream.latest = value;
+      var latest = streams.map(function (d) { return d.latest; });
+      if (latest.every(is_1.def)) { output.next(latest); }
+    }); }
+  );
+
+  output
+    .once('start')
+    .map(function (d) { return streams.map(function ($) { return $.source.emit('start'); }); });
+
+  output
+    .once('stop')
+    .map(function (d) { return streams.map(function ($) { return $.source.emit('stop'); }); });
+
+  return output
+};
 
 return client;
 
