@@ -900,8 +900,7 @@ var get = function (ripple) { return function (name, k) { return ripple
   .start(); }; };
 
 var cache = function (ripple, name, k) { return function (change, i, n) {
-  // debugger
-  name = change.name || name;
+  if (change.name && name != change.name) { ripple.link(name, change.name); }
   if (is_1.def(k)) { change.key = k + "." + (str(change.key)); }
   !change.key && change.type == 'update'
     ? ripple(body(extend({ name: name })(change)))
