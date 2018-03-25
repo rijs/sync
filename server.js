@@ -167,7 +167,7 @@ const parse = useragent => {
   if (os.name == 'os') os.name == 'osx'
   if (name == 'chrome mobile') name = 'chrome'
   if (name == 'microsoft edge') name = 'edge'
-console.log("uid", `${name}-${version}-${os.name}-${os.version}`)
+
   return { 
     uid: `${name}-${version}-${os.name}-${os.version}`
   , version
