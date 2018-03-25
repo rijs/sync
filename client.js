@@ -31,8 +31,7 @@ const get = ripple => (name, k) => ripple
   .start()
 
 const cache = (ripple, name, k) => (change, i, n) => {
-  // debugger
-  name = change.name || name
+  if (change.name && name != change.name) ripple.link(name, change.name)
   if (is.def(k)) change.key = `${k}.${str(change.key)}`
   !change.key && change.type == 'update'
     ? ripple(body(extend({ name })(change)))
