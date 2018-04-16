@@ -15,7 +15,7 @@ module.exports = function sync(
   ripple
     .server
     .on('recv')
-    .map(({ data, server }, i, n) => cache(ripple, server.name)(data, i, n))
+    .map((data, i, n) => cache(ripple)(data, i, n))
 
   return ripple
 }
@@ -30,15 +30,17 @@ const get = ripple => (name, k) => ripple
   .filter((d, i, n) => n.source.emit('stop'))
   .start()
 
-const cache = (ripple, name, k) => (change, i, n) => {
-  if (change.name && name != change.name) ripple.link(name, change.name)
+const cache = (ripple, n, k) => change => {
+  // if (name && change.name && name != change.name) ripple.link(name, change.name)
+  const name = change.name = change.name || n
+  if (!change.type) change.type = 'update'
   if (is.def(k)) change.key = `${k}.${str(change.key)}`
   !change.key && change.type == 'update'
-    ? ripple(body(extend({ name })(change)))
+    ? ripple(body(change))
     : set(change)(ripple.resources[name] ? ripple(name) : ripple(name, {}))
 
-  ripple.change = assign({ name }, change)
-  // TODO: change.key or key here?
+  ripple.change = change
+  
   return key(k)(ripple(name))
 }
 
