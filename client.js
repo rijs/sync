@@ -33,7 +33,7 @@ const get = ripple => (name, k) => !k && name in ripple.resources
       .start()
 
 const cache = (ripple, n, k) => change => {
-  // if (name && change.name && name != change.name) ripple.link(name, change.name)
+  if (name && change.name && name != change.name) ripple.link(name, change.name)
   const name = change.name = change.name || n
   if (!change.type) change.type = 'update'
   if (is.def(k)) change.key = `${k}.${str(change.key)}`
