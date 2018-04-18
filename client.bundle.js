@@ -636,13 +636,15 @@ var send = function (ref) {
                        : server.send({ name: name, type: type, value: value }); };
 };
 
-var get = function (ripple) { return function (name, k) { return ripple
-  .subscribe(name, k)
-  .filter(function (d, i, n) { return n.source.emit('stop'); })
-  .start(); }; };
+var get = function (ripple) { return function (name, k) { return !k && name in ripple.resources
+  ? ripple(name)
+  : ripple
+      .subscribe(name, k)
+      .filter(function (d, i, n) { return n.source.emit('stop'); })
+      .start(); }; };
 
 var cache = function (ripple, n, k) { return function (change) {
-  // if (name && change.name && name != change.name) ripple.link(name, change.name)
+  if (name && change.name && name != change.name) { ripple.link(name, change.name); }
   var name = change.name = change.name || n;
   if (!change.type) { change.type = 'update'; }
   if (is_1.def(k)) { change.key = k + "." + (str(change.key)); }
@@ -687,7 +689,7 @@ var subscribe = function (ripple) { return function (name, k) {
     .send(name, 'SUBSCRIBE', k)
     .map(cache(ripple, name, k))
     .each(function (value) {
-      raw.subs.map(function (o) { return o.next(value); });
+      [].concat(raw.subs).map(function (o) { return o.next(value); });
       delete ripple.change;
     });
 
