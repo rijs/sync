@@ -20,7 +20,7 @@ module.exports = function sync(
   }, { http: server })
 
   // TODO: this should be populated by modules
-  ripple.server.blacklist = ['loaded', 'transpile', 'from', 'path', 'flattened', 'vary']
+  ripple.server.blacklist = ['loaded', 'loading', 'transpile', 'from', 'path', 'flattened', 'vary']
   ripple.server.cache = new LRUMap(max)
   ripple
     .on('change')
