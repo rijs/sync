@@ -636,12 +636,10 @@ var send = function (ref) {
                        : server.send({ name: name, type: type, value: value }); };
 };
 
-var get = function (ripple) { return function (name, k) { return !k && name in ripple.resources
-  ? ripple(name)
-  : ripple
-      .subscribe(name, k)
-      .filter(function (d, i, n) { return n.source.emit('stop'); })
-      .start(); }; };
+var get = function (ripple) { return function (name, k) { return ripple
+  .subscribe(name, k)
+  .filter(function (d, i, n) { return n.source.emit('stop'); })
+  .start(); }; };
 
 var cache = function (ripple, n, k) { return function (change) {
   if (name && change.name && name != change.name) { ripple.link(name, change.name); }
