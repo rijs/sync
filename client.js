@@ -25,10 +25,12 @@ const send = ({ server }) => (name, type, value) =>
 : is.obj(name)         ? server.send(name)
                        : server.send({ name, type, value })
 
-const get = ripple => (name, k) => ripple
-  .subscribe(name, k)
-  .filter((d, i, n) => n.source.emit('stop'))
-  .start()
+const get = ripple => (name, k) => !k && name in ripple.resources
+  ? ripple(name)
+  : ripple
+      .subscribe(name, k)
+      .filter((d, i, n) => n.source.emit('stop'))
+      .start()
 
 const cache = (ripple, n, k) => change => {
   // if (name && change.name && name != change.name) ripple.link(name, change.name)
