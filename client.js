@@ -78,7 +78,7 @@ const subscribe = ripple => (name, k) => {
     .send(name, 'SUBSCRIBE', k)
     .map(cache(ripple, name, k))
     .each(value => {
-      raw.subs.map(o => o.next(value))
+      [].concat(raw.subs).map(o => o.next(value))
       delete ripple.change
     })
 
